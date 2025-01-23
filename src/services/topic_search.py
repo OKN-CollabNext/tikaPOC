@@ -31,12 +31,12 @@ class TopicSearcher:
             truncation=True,
             padding=True
         )
-        
+
         with torch.no_grad():
             outputs = self.model(**inputs)
             # Use CLS token embedding
             embedding = outputs.last_hidden_state[0, 0, :].numpy()
-        
+
         return embedding
 
     def search_topics(
@@ -48,20 +48,20 @@ class TopicSearcher:
     ) -> List[Dict[str, Any]]:
         """
         Search for topics based on query, excluding specified topic IDs.
-        
+
         Args:
             query: Search query
             excluded_topic_ids: Set of topic IDs to exclude
             n_similar_keywords: Number of similar keywords to consider
             n_topics: Number of topics to return
-            
+
         Returns:
             List of topic dictionaries with id, display_name, and description
         """
-        
+
         # Get query embedding
         query_embedding = self.get_embedding(query)
-        
+
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 # Using a CTE for clarity and efficiency
@@ -69,7 +69,7 @@ class TopicSearcher:
                     """
                     WITH similar_keywords AS (
                         -- Find similar keywords
-                        SELECT 
+                        SELECT
                             k.keyword,
                             k.id as keyword_id,
                             embedding <=> %s::vector as similarity
@@ -79,7 +79,7 @@ class TopicSearcher:
                     ),
                     topic_scores AS (
                         -- Get topics and their scores
-                        SELECT 
+                        SELECT
                             t.id,
                             t.display_name,
                             t.description,
@@ -92,14 +92,14 @@ class TopicSearcher:
                         GROUP BY t.id, t.display_name, t.description
                     )
                     -- Final ranking and selection
-                    SELECT 
+                    SELECT
                         id,
                         display_name,
                         description,
                         matching_keywords,
                         avg_similarity
                     FROM topic_scores
-                    ORDER BY 
+                    ORDER BY
                         matching_keywords DESC,
                         avg_similarity ASC
                     LIMIT %s
@@ -111,7 +111,7 @@ class TopicSearcher:
                         n_topics
                     )
                 )
-                
+
                 results = [
                     {
                         "id": row[0],
@@ -122,7 +122,7 @@ class TopicSearcher:
                     }
                     for row in cur.fetchall()
                 ]
-                
+
                 return results
 
 def get_db_connection() -> connection:
@@ -146,7 +146,7 @@ def get_db_connection() -> connection:
         print(f"Database Name: {db_name}")  # Let's explicitly see the database name
         print(f"User: {user}")
         print(f"Port: {port}")
-        
+
         # Now try to connect
         try:
             conn = psycopg2.connect(
@@ -154,14 +154,16 @@ def get_db_connection() -> connection:
                 database=db_name,
                 user=user,
                 password=password,
-                port=port
+                port=port,
+                sslmode="require",
+                sslrootcert="/Users/deangladish/tikaPOC/azure_root_chain.pem"
             )
             print("Connection successful!")
             return conn
         except psycopg2.Error as e:
             print(f"PostgreSQL Error: {e.pgcode} - {e.pgerror}")
             raise
-            
+
     except Exception as e:
         print(f"Connection error details: {type(e).__name__}: {str(e)}")
-        raise ConnectionError(f"Failed to connect to database: {str(e)}") 
+        raise ConnectionError(f"Failed to connect to database: {str(e)}")
