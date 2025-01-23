@@ -22,13 +22,15 @@ def get_db_connection():
                 cur.execute(...)
     """
     load_dotenv()  # Load environment variables
-    
+
     conn = psycopg2.connect(
         dbname=os.getenv("DB_NAME"),
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASSWORD"),
         host=os.getenv("DB_HOST"),
-        port=os.getenv("DB_PORT", "5432")
+        port=os.getenv("DB_PORT", "5432"),
+        sslmode="require",
+        sslrootcert="/Users/deangladish/tikaPOC/azure_root_chain.pem"
     )
     try:
         yield conn
@@ -56,10 +58,10 @@ class SciBertEmbedder:
 
         # Get model outputs
         outputs = self.model(**encoded)
-        
+
         # Use [CLS] token embeddings as sentence embeddings
         embeddings = outputs.last_hidden_state[:, 0, :].cpu().numpy()
-        
+
         return embeddings
 
 def batch_iterator(iterable: Iterator, batch_size: int) -> Iterator:
@@ -69,12 +71,12 @@ def batch_iterator(iterable: Iterator, batch_size: int) -> Iterator:
         yield batch
 
 def process_topics_batch(
-    topics: List[Dict[str, Any]], 
+    topics: List[Dict[str, Any]],
     embedder: SciBertEmbedder,
     batch_size: int = 64
 ) -> None:
     """Process topics in batches, handling both embeddings and DB insertions."""
-    
+
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             # First, insert all topics in one go
@@ -82,7 +84,7 @@ def process_topics_batch(
                 (topic["id"], topic["display_name"], topic.get("description", ""))
                 for topic in topics
             ]
-            
+
             print("Inserting topics...")
             execute_values(
                 cur,
@@ -105,12 +107,12 @@ def process_topics_batch(
 
             print(f"Processing {len(keyword_list)} unique keywords in {total_batches} batches")
 
-            for keyword_batch in tqdm(batch_iterator(keyword_list, batch_size), 
-                                    total=total_batches, 
+            for keyword_batch in tqdm(batch_iterator(keyword_list, batch_size),
+                                    total=total_batches,
                                     desc="Processing keyword batches"):
                 # Get embeddings for the batch using the passed embedder
                 embeddings = embedder.get_embeddings_batch(keyword_batch)
-                
+
                 # Prepare batch data
                 keyword_data = [
                     (keyword, embedding.astype(float).tolist())  # Convert numpy array to list
@@ -121,19 +123,19 @@ def process_topics_batch(
                 execute_values(
                     cur,
                     """
-                    INSERT INTO keywords (keyword, embedding) 
-                    VALUES %s 
-                    ON CONFLICT (keyword) DO UPDATE 
-                    SET embedding = EXCLUDED.embedding 
+                    INSERT INTO keywords (keyword, embedding)
+                    VALUES %s
+                    ON CONFLICT (keyword) DO UPDATE
+                    SET embedding = EXCLUDED.embedding
                     RETURNING id, keyword
                     """,
                     keyword_data
                 )
-                
+
                 # Store keyword to id mapping
                 for row in cur.fetchall():
                     keyword_id_map[row[1]] = row[0]
-                
+
                 conn.commit()
 
             # Process topic-keyword relationships in batches
@@ -148,8 +150,8 @@ def process_topics_batch(
                 execute_values(
                     cur,
                     """
-                    INSERT INTO topic_keywords (topic_id, keyword_id) 
-                    VALUES %s 
+                    INSERT INTO topic_keywords (topic_id, keyword_id)
+                    VALUES %s
                     ON CONFLICT DO NOTHING
                     """,
                     batch
@@ -164,12 +166,12 @@ def sanity_check_data() -> None:
             cur.execute("SELECT COUNT(*) FROM topics")
             topic_count = cur.fetchone()[0]
             print(f"Total topics: {topic_count}")
-            
+
             # Check keyword count
             cur.execute("SELECT COUNT(*) FROM keywords")
             keyword_count = cur.fetchone()[0]
             print(f"Total keywords: {keyword_count}")
-            
+
             # Check topic-keyword relationships
             cur.execute("SELECT COUNT(*) FROM topic_keywords")
             relationship_count = cur.fetchone()[0]
@@ -179,11 +181,11 @@ def main() -> None:
     # Load your topics from JSON
     with open("../../data/openalex_topics_raw.json", "r") as f:
         topics = json.load(f)
-    
+
     # Initialize embedder
     print("Initializing SciBERT model...")
     embedder = SciBertEmbedder()
-    
+
     process_topics_batch(
         topics,
         embedder,
