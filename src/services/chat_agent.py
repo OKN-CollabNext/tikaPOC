@@ -1,9 +1,10 @@
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from openai import AzureOpenAI
 import os
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 from .topic_agent import TopicAgent
+from .feedback_service import FeedbackService
 import json
 
 # Set up Key Vault client
@@ -22,6 +23,7 @@ class ChatManager:
         self.deployment = secret_client.get_secret("AZURE-OPENAI-DEPLOYMENT").value
         print(f"Using OpenAI deployment: {self.deployment}")
         self.topic_agent = TopicAgent()
+        self.feedback_service = FeedbackService()
 
     def handle_classification_message(self, user_topic: str) -> Dict[str, str]:
         return self.topic_agent.classify_topic_across_ontologies(user_topic)
@@ -178,3 +180,14 @@ class ChatManager:
         Delegate to the method of autocomplete of TopicAgent.
         """
         return self.topic_agent.autocomplete(partial_input, limit)
+
+    def handle_feedback(self, user_id: Optional[str], rating: int, comment: Optional[str]) -> None:
+        """
+        Handle user feedback by saving it to the database.
+
+        Args:
+            user_id (Optional[str]): Identifier for the user (if available).
+            rating (int): Rating between 1 and 5.
+            comment (Optional[str]): Additional comments from the user.
+        """
+        self.feedback_service.save_feedback(user_id, rating, comment)

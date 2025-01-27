@@ -74,47 +74,60 @@ CREATE TABLE topic_grants (
 CREATE INDEX ON grants USING ivfflat (embedding vector_cosine_ops)
 WITH (lists = 100);
 
--------------------------------------------------
--- NEW: Patents
--------------------------------------------------
-CREATE TABLE patents (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    abstract TEXT,
-    inventor TEXT[],
-    publication_date DATE,
-    embedding vector(768),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
+-- -------------------------------------------------
+-- -- NEW: Patents
+-- -------------------------------------------------
+-- CREATE TABLE patents (
+--     id TEXT PRIMARY KEY,
+--     title TEXT NOT NULL,
+--     abstract TEXT,
+--     inventor TEXT[],
+--     publication_date DATE,
+--     embedding vector(768),
+--     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+-- );
 
-CREATE TABLE topic_patents (
-    topic_id TEXT REFERENCES topics(id),
-    patent_id TEXT REFERENCES patents(id),
-    PRIMARY KEY (topic_id, patent_id)
-);
+-- CREATE TABLE topic_patents (
+--     topic_id TEXT REFERENCES topics(id),
+--     patent_id TEXT REFERENCES patents(id),
+--     PRIMARY KEY (topic_id, patent_id)
+-- );
 
-CREATE INDEX ON patents USING ivfflat (embedding vector_cosine_ops)
-WITH (lists = 100);
+-- CREATE INDEX ON patents USING ivfflat (embedding vector_cosine_ops)
+-- WITH (lists = 100);
 
--------------------------------------------------
--- NEW: Conferences
--------------------------------------------------
-CREATE TABLE conferences (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    location TEXT,
-    start_date DATE,
-    end_date DATE,
-    description TEXT,
-    embedding vector(768),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
+-- -------------------------------------------------
+-- -- NEW: Conferences
+-- -------------------------------------------------
+-- CREATE TABLE conferences (
+--     id TEXT PRIMARY KEY,
+--     name TEXT NOT NULL,
+--     location TEXT,
+--     start_date DATE,
+--     end_date DATE,
+--     description TEXT,
+--     embedding vector(768),
+--     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+-- );
 
-CREATE TABLE topic_conferences (
-    topic_id TEXT REFERENCES topics(id),
-    conference_id TEXT REFERENCES conferences(id),
-    PRIMARY KEY (topic_id, conference_id)
-);
+-- CREATE TABLE topic_conferences (
+--     topic_id TEXT REFERENCES topics(id),
+--     conference_id TEXT REFERENCES conferences(id),
+--     PRIMARY KEY (topic_id, conference_id)
+-- );
 
 CREATE INDEX ON conferences USING ivfflat (embedding vector_cosine_ops)
 WITH (lists = 100);
+-------------------------------------------------
+-- NEW: Feedback
+-------------------------------------------------
+CREATE TABLE feedback (
+    id SERIAL PRIMARY KEY,
+    user_id TEXT,  -- Optional: If you have user authentication
+    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    comment TEXT,
+    timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Optionally, create an index on timestamp for faster queries
+CREATE INDEX idx_feedback_timestamp ON feedback (timestamp);

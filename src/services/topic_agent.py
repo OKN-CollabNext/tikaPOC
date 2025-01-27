@@ -307,3 +307,92 @@ class TopicAgent:
         Example method that calls search_persons to retrieve relevant people.
         """
         return self.searcher.search_persons(query)
+
+    def get_graph_data(self) -> Dict[str, Any]:
+        """
+        Generate graph data with nodes and edges for visualization.
+        Nodes represent topics, grants, patents, conferences, and persons.
+        Edges represent relationships between these entities.
+        """
+        nodes = []
+        edges = []
+
+        # Fetch all topics
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                # (1) FETCH the topics
+                cur.execute("SELECT id, display_name FROM topics")
+                topics = cur.fetchall()
+
+                for topic_id, display_name in topics:
+                    nodes.append({
+                        "data": {"id": topic_id, "label": display_name, "type": "Topic"}
+                    })
+                # # (2) GET some patents
+                # # Fetch grants and connect to topics
+                # cur.execute("SELECT id, title, description FROM grants")
+                # grants = cur.fetchall()
+                # for grant_id, title, description in grants:
+                #     nodes.append({
+                #         "data": {"id": grant_id, "label": title, "type": "Grant"}
+                #     })
+                #     # EXAMPLE of topic_patents table
+                #     # Assuming you have a topic_grants table
+                #     cur.execute("SELECT topic_id FROM topic_grants WHERE grant_id = %s", (grant_id,))
+                #     associated_topics = cur.fetchall()
+                #     for (topic_id,) in associated_topics:
+                #         edges.append({
+                #             "data": {"source": grant_id, "target": topic_id, "label": "funds"}
+                #         })
+
+                # Similarly, fetch patents
+                # # (3) CONFERENCES time, no patents
+                # cur.execute("SELECT id, title FROM patents")
+                # patents = cur.fetchall()
+                # for patent_id, title in patents:
+                #     nodes.append({
+                #         "data": {"id": patent_id, "label": title, "type": "Patent"}
+                #     })
+                #     # And then we have this example of the table of topic_conferences
+                #     # Assuming a topic_patents table
+                #     cur.execute("SELECT topic_id FROM topic_patents WHERE patent_id = %s", (patent_id,))
+                #     associated_topics = cur.fetchall()
+                #     for (topic_id,) in associated_topics:
+                #         edges.append({
+                #             "data": {"source": patent_id, "target": topic_id, "label": "patented_under"}
+                #         })
+                # # (4) is PERSONS
+                # # Fetch conferences
+                # cur.execute("SELECT id, name FROM conferences")
+                # conferences = cur.fetchall()
+                # for conf_id, name in conferences:
+                #     nodes.append({
+                #         "data": {"id": conf_id, "label": name, "type": "Conference"}
+                #     })
+                #     # Assuming a topic_conferences table
+                #     cur.execute("SELECT topic_id FROM topic_conferences WHERE conference_id = %s", (conf_id,))
+                #     associated_topics = cur.fetchall()
+                #     for (topic_id,) in associated_topics:
+                #         edges.append({
+                #             "data": {"source": conf_id, "target": topic_id, "label": "discusses"}
+                #         })
+                # Fetch persons
+                # cur.execute("SELECT id, name FROM persons")
+                # persons = cur.fetchall()
+                # for person_id, name in persons:
+                #     nodes.append({
+                #         "data": {"id": person_id, "label": name, "type": "Person"}
+                #     })
+                    # # Assuming you have relationships like topic_persons
+                    # cur.execute("SELECT topic_id FROM topic_persons WHERE person_id = %s", (person_id,))
+                    # associated_topics = cur.fetchall()
+                    # for (topic_id,) in associated_topics:
+                    #     edges.append({
+                    #         "data": {
+                    #             "source": person_id,
+                    #             "target": topic_id,
+                    #             "label": "expert_in"
+                    #             }
+                    #     })
+
+        return {"nodes": nodes, "edges": edges}

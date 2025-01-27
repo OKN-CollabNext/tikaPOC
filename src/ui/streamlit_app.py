@@ -3,6 +3,8 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 from services.chat_agent import ChatManager
+from streamlit_cytoscapejs import st_cytoscapejs
+import json
 
 def initialize_session_state():
     """Initialize session state variables."""
@@ -14,6 +16,9 @@ def initialize_session_state():
     # final and last input of the user for the generation of JSON
     if "last_user_input" not in st.session_state:
         st.session_state.last_user_input = ""
+    # And now for the graph data you've been waiting for days for
+    if "graph_data" not in st.session_state:
+        st.session_state.graph_data = st.session_state.chat_manager.topic_agent.get_graph_data()
 
 def main():
     st.title("Socratic RAG Agent")
@@ -120,6 +125,110 @@ def main():
                 st.json(json.loads(jsonld))  # nicely formatted
         else:
             st.write("No persons found for that query.")
+
+    # -------------------------------
+    # 6. Gather User Feedback with Forms
+    # -------------------------------
+    st.sidebar.header("User Feedback")
+
+    with st.sidebar.form("Feedback Form"):
+        st.write("We value your feedback to improve our service.")
+        rating = st.slider("Rate the search results", 1, 5, 5)
+        comment = st.text_area("Additional comments", height=150)
+
+        submitted = st.form_submit_button("Submit Feedback")
+        if submitted:
+            # Optionally, capture user_id if available
+            user_id = None  # Replace with actual user ID if you have authentication
+            st.session_state.chat_manager.handle_feedback(user_id, rating, comment)
+            st.sidebar.success("Thank you for your feedback!")
+
+    # -------------------------------
+    # 7. Graph Visualization
+    # -------------------------------
+    st.header("Knowledge Graph")
+
+    # Fetch graph data
+    graph_data = st.session_state.graph_data
+
+    # Sidebar filters
+    with st.sidebar:
+        st.subheader("Graph Filters")
+        node_types = ['Topic']
+        selected_types = st.multiselect("Select node types to display:", node_types, default=node_types)
+
+    # Filter nodes and edges based on selected types
+    filtered_nodes = [node for node in graph_data['nodes'] if node['data']['type'] in selected_types]
+    filtered_edges = [edge for edge in graph_data['edges'] if
+                    any(node['data']['id'] == edge['data']['source'] for node in filtered_nodes) and
+                    any(node['data']['id'] == edge['data']['target'] for node in filtered_nodes)]
+
+    # Combine nodes and edges into a single list
+    filtered_graph = filtered_nodes + filtered_edges
+
+    # Render the graph using Cytoscape.js
+    st_cytoscapejs(
+        elements=filtered_graph,
+        stylesheet=[
+            {
+                'selector': 'node',
+                'style': {
+                    'label': 'data(label)',
+                    'background-color': '#007BFF',
+                    'text-valign': 'center',
+                    'color': '#fff',
+                    'text-outline-width': 2,
+                    'text-outline-color': '#007BFF',
+                    'width': 'label',
+                    'height': 'label',
+                    'padding': '10px'
+                }
+            },
+            {
+                'selector': 'edge',
+                'style': {
+                    'label': 'data(label)',
+                    'width': 2,
+                    'line-color': '#ccc',
+                    'target-arrow-color': '#ccc',
+                    'target-arrow-shape': 'triangle',
+                    'curve-style': 'bezier',
+                    'font-size': '10px',
+                    'text-rotation': 'autorotate'
+                }
+            },
+            {
+                'selector': '[type = "Grant"]',
+                'style': {
+                    'background-color': '#28a745',
+                    'shape': 'ellipse'
+                }
+            },
+            {
+                'selector': '[type = "Patent"]',
+                'style': {
+                    'background-color': '#ffc107',
+                    'shape': 'rectangle'
+                }
+            },
+            {
+                'selector': '[type = "Conference"]',
+                'style': {
+                    'background-color': '#17a2b8',
+                    'shape': 'diamond'
+                }
+            },
+            {
+                'selector': '[type = "Person"]',
+                'style': {
+                    'background-color': '#6f42c1',
+                    'shape': 'hexagon'
+                }
+            }
+        ],
+        # layout={'name': 'cose'},  # Optional: specify layout
+        # style={'width': '100%', 'height': '600px'}
+    )
 
 if __name__ == "__main__":
     main()
