@@ -31,12 +31,12 @@ class TopicSearcher:
             truncation=True,
             padding=True
         )
-        
+
         with torch.no_grad():
             outputs = self.model(**inputs)
             # Use CLS token embedding
             embedding = outputs.last_hidden_state[0, 0, :].numpy()
-        
+
         return embedding
 
     def search_topics(
@@ -48,20 +48,20 @@ class TopicSearcher:
     ) -> List[Dict[str, Any]]:
         """
         Search for topics based on query, excluding specified topic IDs.
-        
+
         Args:
             query: Search query
             excluded_topic_ids: Set of topic IDs to exclude
             n_similar_keywords: Number of similar keywords to consider
             n_topics: Number of topics to return
-            
+
         Returns:
             List of topic dictionaries with id, display_name, and description
         """
-        
+
         # Get query embedding
         query_embedding = self.get_embedding(query)
-        
+
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 # Using a CTE for clarity and efficiency
@@ -69,7 +69,7 @@ class TopicSearcher:
                     """
                     WITH similar_keywords AS (
                         -- Find similar keywords
-                        SELECT 
+                        SELECT
                             k.keyword,
                             k.id as keyword_id,
                             embedding <=> %s::vector as similarity
@@ -79,7 +79,7 @@ class TopicSearcher:
                     ),
                     topic_scores AS (
                         -- Get topics and their scores
-                        SELECT 
+                        SELECT
                             t.id,
                             t.display_name,
                             t.description,
@@ -92,14 +92,14 @@ class TopicSearcher:
                         GROUP BY t.id, t.display_name, t.description
                     )
                     -- Final ranking and selection
-                    SELECT 
+                    SELECT
                         id,
                         display_name,
                         description,
                         matching_keywords,
                         avg_similarity
                     FROM topic_scores
-                    ORDER BY 
+                    ORDER BY
                         matching_keywords DESC,
                         avg_similarity ASC
                     LIMIT %s
@@ -111,7 +111,7 @@ class TopicSearcher:
                         n_topics
                     )
                 )
-                
+
                 results = [
                     {
                         "id": row[0],
@@ -122,8 +122,122 @@ class TopicSearcher:
                     }
                     for row in cur.fetchall()
                 ]
-                
+
                 return results
+
+    # ---------------------------------------------------------------------
+    # NEW: Basic examples for searching grants, patents, conferences
+    # ---------------------------------------------------------------------
+    def search_grants(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
+        """Vector-based search over grants by embedding the query and comparing."""
+        query_emb = self.get_embedding(query)
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        g.id,
+                        g.title,
+                        g.abstract,
+                        (g.embedding <=> %s::vector) AS similarity
+                    FROM grants g
+                    ORDER BY similarity
+                    LIMIT %s
+                    """,
+                    (query_emb.tolist(), n_results)
+                )
+                rows = cur.fetchall()
+
+        results = []
+        for row in rows:
+            results.append({
+                "id": row[0],
+                "title": row[1],
+                "abstract": row[2] or "",
+                "similarity_score": float(row[3])
+            })
+        return results
+
+    # Inside topic_search.py
+    def search_persons(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """
+        Very simple text search for persons by name or affiliation.
+        (Or you could do embedding-based if you store a vector for each person.)
+        """
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT id, name, affiliation, profile_url
+                    FROM persons
+                    WHERE name ILIKE %s OR affiliation ILIKE %s
+                    LIMIT %s
+                """, (f"%{query}%", f"%{query}%", limit))
+                rows = cur.fetchall()
+
+        return [
+            {"id": r[0], "name": r[1], "affiliation": r[2], "profile_url": r[3]}
+            for r in rows
+        ]
+
+    def search_patents(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
+        """Vector-based search over patents."""
+        query_emb = self.get_embedding(query)
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        p.id,
+                        p.title,
+                        p.abstract,
+                        (p.embedding <=> %s::vector) AS similarity
+                    FROM patents p
+                    ORDER BY similarity
+                    LIMIT %s
+                    """,
+                    (query_emb.tolist(), n_results)
+                )
+                rows = cur.fetchall()
+
+        results = []
+        for row in rows:
+            results.append({
+                "id": row[0],
+                "title": row[1],
+                "abstract": row[2] or "",
+                "similarity_score": float(row[3])
+            })
+        return results
+
+    def search_conferences(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
+        """Vector-based search over conferences."""
+        query_emb = self.get_embedding(query)
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        c.id,
+                        c.name,
+                        c.description,
+                        (c.embedding <=> %s::vector) AS similarity
+                    FROM conferences c
+                    ORDER BY similarity
+                    LIMIT %s
+                    """,
+                    (query_emb.tolist(), n_results)
+                )
+                rows = cur.fetchall()
+
+        results = []
+        for row in rows:
+            results.append({
+                "id": row[0],
+                "name": row[1],
+                "description": row[2] or "",
+                "similarity_score": float(row[3])
+            })
+        return results
 
 def get_db_connection() -> connection:
     """
@@ -137,6 +251,12 @@ def get_db_connection() -> connection:
             user = secret_client.get_secret("DB-USER").value
             password = secret_client.get_secret("DB-PASSWORD").value
             port = secret_client.get_secret("DB-PORT").value
+
+            print("Retrieved connection details:")
+            print(f"Host: {host}")
+            print(f"Database Name: {db_name}")
+            print(f"User: {user}")
+            print(f"Port: {port}")
         except Exception as e:
             print(f"Failed to retrieve secrets from Key Vault: {str(e)}")
             raise
@@ -146,7 +266,7 @@ def get_db_connection() -> connection:
         print(f"Database Name: {db_name}")  # Let's explicitly see the database name
         print(f"User: {user}")
         print(f"Port: {port}")
-        
+
         # Now try to connect
         try:
             conn = psycopg2.connect(
@@ -154,14 +274,16 @@ def get_db_connection() -> connection:
                 database=db_name,
                 user=user,
                 password=password,
-                port=port
+                port=port,
+                sslmode="require",
+                sslrootcert="/Users/deangladish/Downloads/azure_root_chain.pem"
             )
             print("Connection successful!")
             return conn
         except psycopg2.Error as e:
             print(f"PostgreSQL Error: {e.pgcode} - {e.pgerror}")
             raise
-            
+
     except Exception as e:
         print(f"Connection error details: {type(e).__name__}: {str(e)}")
-        raise ConnectionError(f"Failed to connect to database: {str(e)}") 
+        raise ConnectionError(f"Failed to connect to database: {str(e)}")

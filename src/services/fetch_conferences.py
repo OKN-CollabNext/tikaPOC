@@ -1,0 +1,74 @@
+# File: /Users/deangladish/tikaPOC/src/services/fetch_conferences.py
+
+import requests
+import time
+import json
+from typing import List, Dict, Any
+from tqdm import tqdm
+from .topic_search import get_db_connection
+from .populate_db import SciBertEmbedder
+
+def fetch_conferences_from_api() -> List[Dict[str, Any]]:
+    """
+    Placeholder function to fetch or load conferences data.
+    """
+    mock_data = [
+        {
+            "id": "conf_2024_ai",
+            "name": "International Conference on AI Research",
+            "location": "Paris, France",
+            "start_date": "2024-07-10",
+            "end_date": "2024-07-14",
+            "description": "Leading conference on AI, focusing on large language models..."
+        },
+        {
+            "id": "conf_2025_quantum",
+            "name": "Quantum Computing Summit",
+            "location": "Boston, MA",
+            "start_date": "2025-03-01",
+            "end_date": "2025-03-03",
+            "description": "Annual event for quantum computing research..."
+        }
+    ]
+    return mock_data
+
+def insert_conferences_to_db(conferences_data: List[Dict[str, Any]]) -> None:
+    embedder = SciBertEmbedder()
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            for c in tqdm(conferences_data, desc="Inserting conferences"):
+                text_for_embedding = (c.get("name","") + " " + c.get("description","")).strip()
+                emb = embedder.get_embeddings_batch([text_for_embedding])[0]
+
+                cur.execute(
+                    """
+                    INSERT INTO conferences (id, name, location, start_date, end_date, description, embedding)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (id) DO UPDATE
+                      SET name = EXCLUDED.name,
+                          location = EXCLUDED.location,
+                          start_date = EXCLUDED.start_date,
+                          end_date = EXCLUDED.end_date,
+                          description = EXCLUDED.description,
+                          embedding = EXCLUDED.embedding
+                    """,
+                    (
+                        c["id"],
+                        c["name"],
+                        c.get("location"),
+                        c.get("start_date"),
+                        c.get("end_date"),
+                        c.get("description",""),
+                        emb.tolist()
+                    )
+                )
+
+        conn.commit()
+
+def main():
+    conferences = fetch_conferences_from_api()
+    insert_conferences_to_db(conferences)
+
+if __name__ == "__main__":
+    main()
