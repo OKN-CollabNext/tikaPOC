@@ -1,18 +1,20 @@
-# File: /Users/deangladish/tikaPOC/src/services/fetch_grants.py
-
-"""
-Example script to fetch grants from some external API (fake or real),
-then embed them and insert them into the 'grants' and 'topic_grants' tables.
-Adjust as needed for your actual data source.
-"""
-
-import requests
-import time
-import json
 from typing import List, Dict, Any
-from tqdm import tqdm
 from .topic_search import get_db_connection
 from .populate_db import SciBertEmbedder
+import logging
+from tqdm import tqdm
+
+
+# Configure logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+formatter = logging.Formatter(
+    '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+)
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
 
 def fetch_grants_from_api() -> List[Dict[str, Any]]:
     """
@@ -28,7 +30,7 @@ def fetch_grants_from_api() -> List[Dict[str, Any]]:
             "abstract": "This grant focuses on neural network architectures...",
             "investigators": ["Alice Smith", "Bob Jones"],
             "start_date": "2024-01-01",
-            "end_date": "2026-12-31"
+            "end_date": "2026-12-31",
         },
         {
             "id": "grant_002",
@@ -36,25 +38,29 @@ def fetch_grants_from_api() -> List[Dict[str, Any]]:
             "abstract": "Research on post-quantum cryptographic algorithms...",
             "investigators": ["Carol White"],
             "start_date": "2023-06-01",
-            "end_date": "2025-05-31"
-        }
+            "end_date": "2025-05-31",
+        },
     ]
+    logger.info(f"Fetched {len(mock_data)} grants from API.")
     return mock_data
+
 
 def insert_grants_to_db(grants_data: List[Dict[str, Any]]) -> None:
     """
     Embed each grant's text, then insert into DB.
-    You can optionally link them to topics if you want to create
-    topic_grants relationships automatically.
+
+    Args:
+        grants_data: List of grant dictionaries.
     """
+    logger.info("Starting insertion of grants into the database.")
     embedder = SciBertEmbedder()
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             for g in tqdm(grants_data, desc="Inserting grants"):
-                # Get embedding for the 'title + abstract' or just abstract
-                text_for_embedding = (g.get("title","") + " " + g.get("abstract","")).strip()
-                emb = embedder.get_embeddings_batch([text_for_embedding])[0]  # shape=(768,)
+                # Get embedding for the 'title + abstract'
+                text_for_embedding = (g.get("title", "") + " " + g.get("abstract", "")).strip()
+                emb = embedder.get_embeddings_batch([text_for_embedding])[0]
 
                 # Insert or upsert into the 'grants' table
                 cur.execute(
@@ -76,17 +82,19 @@ def insert_grants_to_db(grants_data: List[Dict[str, Any]]) -> None:
                         g.get("investigators", []),
                         g.get("start_date"),
                         g.get("end_date"),
-                        emb.tolist(),  # vector
-                    )
+                        emb.tolist(),
+                    ),
                 )
+    conn.commit()
+    logger.info("Completed insertion of grants into the database.")
 
-        conn.commit()
 
 def main():
     # 1) Fetch grants
     grants = fetch_grants_from_api()
     # 2) Insert grants into DB
     insert_grants_to_db(grants)
+
 
 if __name__ == "__main__":
     main()

@@ -2,6 +2,16 @@
 
 A research topic exploration tool powered by Azure OpenAI and vector similarity search.
 
+## Features
+- **Research Topic Exploration:** Amplify Azure OpenAI and vector similarity search to explore and classify research topics.
+- **Multi-Source Integration:** Fetch & integrate data from OpenAlex, IEEE, ACM, AMS, and so much more.
+- **Interactive User Interface:** Real-time interaction through a Streamlit-based chat interface with visualizations.
+- **Feedback Mechanism:** Collect and store user feedback to continuously build upon our search results.
+
+![Build Status](https://github.com/deangladish/tikaPOC/actions/workflows/main.yml/badge.svg)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)
+
 ## Table of Contents
 1. [Running Instructions](#running-instructions)
 2. [Technical Details](#technical-details)
@@ -41,6 +51,10 @@ streamlit run src/ui/streamlit_app.py
 ```
 
 The application will be available at `http://localhost:8501`
+
+
+**Configure Environment Variables**
+    - Create a `.env` file in the root directory and add the necessary secrets as per the [Azure Key Vault Documentation](#).
 
 ## 2. Technical Details
 
@@ -84,3 +98,24 @@ All services are hosted in Azure under the OKN Project Cloudbank subscription:
   - Azure Key Vault: Manages service credentials and connection strings
   - Azure OpenAI Service: GPT-4 deployment for query processing and response generation
 - **Authentication**: Managed through Azure DefaultAzureCredential
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Usage
+
+1. **Run the Application**
+    ```bash
+    streamlit run src/ui/streamlit_app.py
+    ```
+
+2. **Interact with the Chat Interface**
+    - Enter your research query in the chat input.
+    - View classified topics, ontology graphics, and visualizations.
+
+```
+pip install flake8 black
+black .
+flake8 .
+```
