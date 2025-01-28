@@ -28,6 +28,7 @@ def initialize_session_state():
         st.session_state.graph_data = st.session_state.chat_manager.topic_agent.get_graph_data()
 
 def main():
+    st.set_page_config(page_title="Socratic RAG Agent", layout="wide")
     st.title("Socratic RAG Agent")
 
     # Initialize session state
@@ -52,56 +53,62 @@ def main():
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Here we want to provide a toggle or alternatively a button to enable RAG-mode
-    # and thus make everything possible.
-    rag_mode = st.sidebar.checkbox("Enable Rag Mode?")
-    # Here we're going to provide a separate button to request a JSON output
-    # that is structured. (You can combine them if you want, but for now let us
-    # utilize a clean separation).
-    generate_json_button = st.sidebar.button("Generate JSON Structure?")
-    classify_button = st.sidebar.button("Classify Across Ontologies")
+    # Sidebar Controls
+    with st.sidebar:
+        st.header("Options")
+        rag_mode = st.checkbox("Enable RAG Mode?")
+        generate_json_button = st.button("Generate JSON Structure?")
+        classify_button = st.button("Classify Across Ontologies")
+        reset_button = st.button("Reset Conversation")
+        # Feedback Form in Sidebar
+        st.header("User Feedback")
+        with st.form("Feedback Form"):
+            st.write("We value your feedback to improve our service.")
+            rating = st.slider("Rate the search results", 1, 5, 5)
+            comment = st.text_area("Additional comments", height=100)
+            submitted = st.form_submit_button("Submit Feedback")
+            if submitted:
+                user_id = None  # Replace with actual user ID if you have authentication
+                st.session_state.chat_manager.handle_feedback(user_id, rating, comment)
+                st.success("Thank you for your feedback!")
+
+    # Handle Reset Conversation
+    if reset_button:
+        st.session_state.messages = []
+        st.session_state.chat_manager.reset_conversation()
+        st.session_state.last_user_input = ""
+        st.experimental_rerun()
+
     # Normal chat input
     user_input = st.chat_input("What research topics are you interested in? Enter your query to classify:")
     if user_input:
-        # And then we store this input in the state of the session so that we can later on reference it still
+        # Store user input
         st.session_state.last_user_input = user_input
-        # Adds in the user message..adds it into the chat history
+        # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
-        # Thus we have to de-cide how we are going to do the query handling
+        # Handle user input
         if rag_mode:
-            # If we do find that we have enabled the RAG mode, then we can call the
-            # generate_rag_response
-            # response = st.session_state.chat_manager.generate_rag_response(user_input)
-            # Instead of handle_message, we want to call the handle_rag_message
             response = st.session_state.chat_manager.handle_rag_message(user_input)
         else:
-            # Other-wise, we're going to want to do in the flow for the normal
-            # handle_message thing.
             response = st.session_state.chat_manager.handle_message(user_input)
-        # Show the assistant response
+        # Show assistant response
         with st.chat_message("assistant"):
             st.markdown(response)
         # Add assistant response to message history
         st.session_state.messages.append({"role": "assistant", "content": response})
-    # If the user presses the button for the "Generate JSON Structure?":
+
+    # Handle Generate JSON Structure Button
     if generate_json_button:
         if st.session_state.last_user_input:
-            # Here we can call the method for structured generation in ChatManager
             structured_data = st.session_state.chat_manager.generate_structured_ontology(st.session_state.last_user_input)
-            # And the JSON result is something that we directly display in the User Interface
             st.write("**Structured JSON Output:**")
             st.json(structured_data)
         else:
             st.warning("Please enter a query before generating JSON. No query text is available.")
-    # Reset button
-    if st.sidebar.button("Reset Conversation"):
-        st.session_state.messages = []
-        st.session_state.chat_manager.reset_conversation()
-        # Here we're going to additionally reset the last input of the user.
-        st.session_state.last_user_input = ""
-        st.experimental_rerun()
+
+    # Handle Classify Across Ontologies Button
     if classify_button:
         user_topic = st.session_state.last_user_input
         if not user_topic:
@@ -111,8 +118,8 @@ def main():
             st.write("**Ontology Alignment Results:**")
             st.json(alignment)
 
-    # In your main() or another function
-
+    # Person Search Section
+    st.header("Search for a Person")
     person_query = st.text_input("Search for a person by name or affiliation")
     if person_query:
         # search persons
@@ -136,23 +143,11 @@ def main():
     # -------------------------------
     # 6. Gather User Feedback with Forms
     # -------------------------------
-    st.sidebar.header("User Feedback")
-
-    with st.sidebar.form("Feedback Form"):
-        st.write("We value your feedback to improve our service.")
-        rating = st.slider("Rate the search results", 1, 5, 5)
-        comment = st.text_area("Additional comments", height=150)
-
-        submitted = st.form_submit_button("Submit Feedback")
-        if submitted:
-            # Optionally, capture user_id if available
-            user_id = None  # Replace with actual user ID if you have authentication
-            st.session_state.chat_manager.handle_feedback(user_id, rating, comment)
-            st.sidebar.success("Thank you for your feedback!")
+    # Note: Feedback form moved to sidebar for better UI.
 
     # Create Tabs for Different Visualizations
     st.header("Visualizations")
-    tabs = st.tabs(["Knowledge Graph", "D3.js Visualizations"])
+    tabs = st.tabs(["Knowledge Graph", "D3.js Bar Chart"])
 
     # Knowledge Graph Tab
     with tabs[0]:
@@ -161,10 +156,10 @@ def main():
         graph_data = st.session_state.graph_data
 
         # Sidebar Graph Filters within the Knowledge Graph Tab
-        with st.sidebar:
-            st.subheader("Graph Filters")
+        with st.expander("Graph Filters"):
             node_types = ['Topic', 'Grant', 'Patent', 'Conference', 'Person']
             selected_types = st.multiselect("Select node types to display:", node_types, default=node_types)
+            layout_options = st.selectbox("Select Layout:", ["cose", "breadthfirst", "grid", "circle"])
 
         # Filter nodes and edges based on selected types
         filtered_nodes = [node for node in graph_data['nodes'] if node['data']['type'] in selected_types]
@@ -174,73 +169,95 @@ def main():
 
         filtered_graph = filtered_nodes + filtered_edges
 
-        # Render Cytoscape.js Graph
+        # Define enhanced stylesheet for Cytoscape.js
+        stylesheet = [
+            {
+                'selector': 'node',
+                'style': {
+                    'label': 'data(label)',
+                    'text-valign': 'center',
+                    'color': '#fff',
+                    'text-outline-width': 2,
+                    'text-outline-color': '#888',
+                    'width': 'label',
+                    'height': 'label',
+                    'padding': '10px',
+                    'font-size': '12px',
+                    'background-color': '#007BFF',
+                    'shape': 'ellipse',
+                    'transition-property': 'background-color, shape',
+                    'transition-duration': '0.5s'
+                }
+            },
+            {
+                'selector': 'node[type = "Grant"]',
+                'style': {
+                    'background-color': '#28a745',
+                    'shape': 'diamond'
+                }
+            },
+            {
+                'selector': 'node[type = "Patent"]',
+                'style': {
+                    'background-color': '#ffc107',
+                    'shape': 'rectangle'
+                }
+            },
+            {
+                'selector': 'node[type = "Conference"]',
+                'style': {
+                    'background-color': '#17a2b8',
+                    'shape': 'hexagon'
+                }
+            },
+            {
+                'selector': 'node[type = "Person"]',
+                'style': {
+                    'background-color': '#6f42c1',
+                    'shape': 'star'
+                }
+            },
+            {
+                'selector': 'edge',
+                'style': {
+                    'width': 2,
+                    'line-color': '#ccc',
+                    'target-arrow-color': '#ccc',
+                    'target-arrow-shape': 'triangle',
+                    'curve-style': 'bezier',
+                    'label': 'data(label)',
+                    'font-size': '10px',
+                    'text-rotation': 'autorotate',
+                    'color': '#555',
+                    'text-background-color': '#fff',
+                    'text-background-opacity': 1,
+                    'text-background-padding': '3px'
+                }
+            },
+            {
+                'selector': ':selected',
+                'style': {
+                    'background-color': '#f00',
+                    'line-color': '#f00',
+                    'target-arrow-color': '#f00',
+                    'source-arrow-color': '#f00',
+                    'color': '#fff',
+                    'text-outline-color': '#f00'
+                }
+            }
+        ]
+
+        # Render Cytoscape.js Graph with enhanced features
         st_cytoscapejs(
             elements=filtered_graph,
-            stylesheet=[
-                {
-                    'selector': 'node',
-                    'style': {
-                        'label': 'data(label)',
-                        'background-color': '#007BFF',
-                        'text-valign': 'center',
-                        'color': '#fff',
-                        'text-outline-width': 2,
-                        'text-outline-color': '#007BFF',
-                        'width': 'label',
-                        'height': 'label',
-                        'padding': '10px'
-                    }
-                },
-                {
-                    'selector': 'edge',
-                    'style': {
-                        'label': 'data(label)',
-                        'width': 2,
-                        'line-color': '#ccc',
-                        'target-arrow-color': '#ccc',
-                        'target-arrow-shape': 'triangle',
-                        'curve-style': 'bezier',
-                        'font-size': '10px',
-                        'text-rotation': 'autorotate'
-                    }
-                },
-                {
-                    'selector': '[type = "Grant"]',
-                    'style': {
-                        'background-color': '#28a745',
-                        'shape': 'ellipse'
-                    }
-                },
-                {
-                    'selector': '[type = "Patent"]',
-                    'style': {
-                        'background-color': '#ffc107',
-                        'shape': 'rectangle'
-                    }
-                },
-                {
-                    'selector': '[type = "Conference"]',
-                    'style': {
-                        'background-color': '#17a2b8',
-                        'shape': 'diamond'
-                    }
-                },
-                {
-                    'selector': '[type = "Person"]',
-                    'style': {
-                        'background-color': '#6f42c1',
-                        'shape': 'hexagon'
-                    }
-                }
-            ],
-            # layout={'name': 'cose'},  # Specify layout
+            stylesheet=stylesheet,
+            # layout={'name': layout_options, 'animate': True},
             # style={'width': '100%', 'height': '600px'}
         )
 
-    # D3.js Visualization Tab
+    # D3.js Bar Chart Visualization Tab
     with tabs[1]:
-        st.subheader("Sample D3.js Bar Chart")
+        st.subheader("D3.js Bar Chart")
 
         # Sample dynamic data from Python
         dynamic_data = [
@@ -263,12 +280,11 @@ def main():
             d3_html = d3_html.replace("{{ data }}", json.dumps(dynamic_data))
             components.html(
                 d3_html,
-                height=350,  # Adjust height as needed
+                height=550,  # Adjust height as needed for better visibility
                 scrolling=True
             )
         else:
             st.warning("D3.js HTML file not found. Please ensure 'bar_chart_dynamic.html' exists in the 'assets/d3/' directory.")
-
 
 if __name__ == "__main__":
     main()

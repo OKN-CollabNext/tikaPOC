@@ -6,62 +6,135 @@
   <title>D3.js Bar Chart</title>
   <style>
     /* Basic styling for the bar chart */
+    body {
+      font-family: Arial, sans-serif;
+    }
+
     .bar {
       fill: steelblue;
     }
 
     .bar:hover {
-      fill: brown;
+      fill: orange;
     }
 
     .axis-label {
       font-size: 12px;
     }
+
+    .tooltip {
+      position: absolute;
+      text-align: center;
+      padding: 6px;
+      font: 12px sans-serif;
+      background: lightsteelblue;
+      border: 0px;
+      border-radius: 8px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
   </style>
 </head>
 
 <body>
-  <!-- <svg width="500" height="300"></svg> -->
-  <svg viewBox="0 0 500 300" preserveAspectRatio="xMidYMid meet"></svg>
+  <svg viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet"></svg>
+  <div class="tooltip" id="tooltip"></div>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <script>
     // Dynamic data passed from Streamlit
     const data = {{ data }};
 
     const svg = d3.select("svg"),
-      margin = { top: 20, right: 30, bottom: 40, left: 40 },
-      width = +svg.attr("width") - margin.left - margin.right,
-      height = +svg.attr("height") - margin.top - margin.bottom;
+      margin = { top: 40, right: 30, bottom: 60, left: 60 },
+      width = +svg.attr("viewBox").split(" ")[2] - margin.left - margin.right,
+      height = +svg.attr("viewBox").split(" ")[3] - margin.top - margin.bottom;
 
     const g = svg.append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
+    // Define scales
     const x = d3.scaleBand()
-      .rangeRound([0, width])
-      .padding(0.1)
+      .range([0, width])
+      .padding(0.2)
       .domain(data.map(d => d.name));
 
     const y = d3.scaleLinear()
-      .rangeRound([height, 0])
-      .domain([0, d3.max(data, d => d.value)]).nice();
+      .range([height, 0])
+      .domain([0, d3.max(data, d => d.value) * 1.1]).nice();
 
+    const color = d3.scaleSequential()
+      .domain([0, d3.max(data, d => d.value)])
+      .interpolator(d3.interpolateBlues);
+
+    // Add X axis
     g.append("g")
-      .attr("class", "axis-label")
       .attr("transform", `translate(0,${height})`)
-      .call(d3.axisBottom(x));
+      .call(d3.axisBottom(x))
+      .selectAll("text")
+      .attr("transform", "rotate(-45)")
+      .style("text-anchor", "end");
 
+    // Add Y axis
     g.append("g")
-      .attr("class", "axis-label")
       .call(d3.axisLeft(y).ticks(10));
 
+    // Add Y axis label
+    g.append("text")
+      .attr("text-anchor", "end")
+      .attr("x", -margin.top)
+      .attr("y", -margin.left + 15)
+      .attr("transform", "rotate(-90)")
+      .text("Value")
+      .attr("class", "axis-label");
+
+    // Tooltip
+    const tooltip = d3.select("#tooltip");
+
+    // Add bars with transitions
     g.selectAll(".bar")
-      .data(data)
-      .enter().append("rect")
-      .attr("class", "bar")
-      .attr("x", d => x(d.name))
-      .attr("y", d => y(d.value))
-      .attr("width", x.bandwidth())
-      .attr("height", d => height - y(d.value));
+      .data(data, d => d.name)
+      .join(
+        enter => enter.append("rect")
+          .attr("class", "bar")
+          .attr("x", d => x(d.name))
+          .attr("width", x.bandwidth())
+          .attr("y", height)
+          .attr("height", 0)
+          .attr("fill", d => color(d.value))
+          .on("mouseover", (event, d) => {
+            tooltip.transition()
+              .duration(200)
+              .style("opacity", .9);
+            tooltip.html(`<strong>${d.name}</strong><br/>Value: ${d.value}`)
+              .style("left", (event.pageX) + "px")
+              .style("top", (event.pageY - 28) + "px");
+          })
+          .on("mouseout", () => {
+            tooltip.transition()
+              .duration(500)
+              .style("opacity", 0);
+          })
+          .call(enter => enter.transition()
+            .duration(800)
+            .attr("y", d => y(d.value))
+            .attr("height", d => height - y(d.value))
+          ),
+        update => update
+          .transition()
+          .duration(800)
+          .attr("x", d => x(d.name))
+          .attr("width", x.bandwidth())
+          .attr("y", d => y(d.value))
+          .attr("height", d => height - y(d.value))
+          .attr("fill", d => color(d.value)),
+        exit => exit
+          .transition()
+          .duration(800)
+          .attr("y", height)
+          .attr("height", 0)
+          .remove()
+      );
   </script>
 </body>
 
