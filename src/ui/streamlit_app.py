@@ -1,10 +1,17 @@
+from pathlib import Path
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 from services.chat_agent import ChatManager
+import streamlit.components.v1 as components  # Ensure this import
 from streamlit_cytoscapejs import st_cytoscapejs
 import json
+
+def load_d3_html(filepath: str) -> str:
+    """Load the D3.js HTML file."""
+    with open(filepath, 'r', encoding='utf-8') as file:
+        return file.read()
 
 def initialize_session_state():
     """Initialize session state variables."""
@@ -143,92 +150,125 @@ def main():
             st.session_state.chat_manager.handle_feedback(user_id, rating, comment)
             st.sidebar.success("Thank you for your feedback!")
 
-    # -------------------------------
-    # 7. Graph Visualization
-    # -------------------------------
-    st.header("Knowledge Graph")
+    # Create Tabs for Different Visualizations
+    st.header("Visualizations")
+    tabs = st.tabs(["Knowledge Graph", "D3.js Visualizations"])
 
-    # Fetch graph data
-    graph_data = st.session_state.graph_data
+    # Knowledge Graph Tab
+    with tabs[0]:
+        st.subheader("Knowledge Graph")
 
-    # Sidebar filters
-    with st.sidebar:
-        st.subheader("Graph Filters")
-        node_types = ['Topic']
-        selected_types = st.multiselect("Select node types to display:", node_types, default=node_types)
+        graph_data = st.session_state.graph_data
 
-    # Filter nodes and edges based on selected types
-    filtered_nodes = [node for node in graph_data['nodes'] if node['data']['type'] in selected_types]
-    filtered_edges = [edge for edge in graph_data['edges'] if
-                    any(node['data']['id'] == edge['data']['source'] for node in filtered_nodes) and
-                    any(node['data']['id'] == edge['data']['target'] for node in filtered_nodes)]
+        # Sidebar Graph Filters within the Knowledge Graph Tab
+        with st.sidebar:
+            st.subheader("Graph Filters")
+            node_types = ['Topic', 'Grant', 'Patent', 'Conference', 'Person']
+            selected_types = st.multiselect("Select node types to display:", node_types, default=node_types)
 
-    # Combine nodes and edges into a single list
-    filtered_graph = filtered_nodes + filtered_edges
+        # Filter nodes and edges based on selected types
+        filtered_nodes = [node for node in graph_data['nodes'] if node['data']['type'] in selected_types]
+        filtered_edges = [edge for edge in graph_data['edges'] if
+                          any(node['data']['id'] == edge['data']['source'] for node in filtered_nodes) and
+                          any(node['data']['id'] == edge['data']['target'] for node in filtered_nodes)]
 
-    # Render the graph using Cytoscape.js
-    st_cytoscapejs(
-        elements=filtered_graph,
-        stylesheet=[
-            {
-                'selector': 'node',
-                'style': {
-                    'label': 'data(label)',
-                    'background-color': '#007BFF',
-                    'text-valign': 'center',
-                    'color': '#fff',
-                    'text-outline-width': 2,
-                    'text-outline-color': '#007BFF',
-                    'width': 'label',
-                    'height': 'label',
-                    'padding': '10px'
+        filtered_graph = filtered_nodes + filtered_edges
+
+        # Render Cytoscape.js Graph
+        st_cytoscapejs(
+            elements=filtered_graph,
+            stylesheet=[
+                {
+                    'selector': 'node',
+                    'style': {
+                        'label': 'data(label)',
+                        'background-color': '#007BFF',
+                        'text-valign': 'center',
+                        'color': '#fff',
+                        'text-outline-width': 2,
+                        'text-outline-color': '#007BFF',
+                        'width': 'label',
+                        'height': 'label',
+                        'padding': '10px'
+                    }
+                },
+                {
+                    'selector': 'edge',
+                    'style': {
+                        'label': 'data(label)',
+                        'width': 2,
+                        'line-color': '#ccc',
+                        'target-arrow-color': '#ccc',
+                        'target-arrow-shape': 'triangle',
+                        'curve-style': 'bezier',
+                        'font-size': '10px',
+                        'text-rotation': 'autorotate'
+                    }
+                },
+                {
+                    'selector': '[type = "Grant"]',
+                    'style': {
+                        'background-color': '#28a745',
+                        'shape': 'ellipse'
+                    }
+                },
+                {
+                    'selector': '[type = "Patent"]',
+                    'style': {
+                        'background-color': '#ffc107',
+                        'shape': 'rectangle'
+                    }
+                },
+                {
+                    'selector': '[type = "Conference"]',
+                    'style': {
+                        'background-color': '#17a2b8',
+                        'shape': 'diamond'
+                    }
+                },
+                {
+                    'selector': '[type = "Person"]',
+                    'style': {
+                        'background-color': '#6f42c1',
+                        'shape': 'hexagon'
+                    }
                 }
-            },
-            {
-                'selector': 'edge',
-                'style': {
-                    'label': 'data(label)',
-                    'width': 2,
-                    'line-color': '#ccc',
-                    'target-arrow-color': '#ccc',
-                    'target-arrow-shape': 'triangle',
-                    'curve-style': 'bezier',
-                    'font-size': '10px',
-                    'text-rotation': 'autorotate'
-                }
-            },
-            {
-                'selector': '[type = "Grant"]',
-                'style': {
-                    'background-color': '#28a745',
-                    'shape': 'ellipse'
-                }
-            },
-            {
-                'selector': '[type = "Patent"]',
-                'style': {
-                    'background-color': '#ffc107',
-                    'shape': 'rectangle'
-                }
-            },
-            {
-                'selector': '[type = "Conference"]',
-                'style': {
-                    'background-color': '#17a2b8',
-                    'shape': 'diamond'
-                }
-            },
-            {
-                'selector': '[type = "Person"]',
-                'style': {
-                    'background-color': '#6f42c1',
-                    'shape': 'hexagon'
-                }
-            }
-        ],
-        # layout={'name': 'cose'},  # Optional: specify layout
-        # style={'width': '100%', 'height': '600px'}
-    )
+            ],
+            # layout={'name': 'cose'},  # Specify layout
+            # style={'width': '100%', 'height': '600px'}
+        )
+
+    # D3.js Visualization Tab
+    with tabs[1]:
+        st.subheader("Sample D3.js Bar Chart")
+
+        # Sample dynamic data from Python
+        dynamic_data = [
+            {"name": "Topic A", "value": 30},
+            {"name": "Topic B", "value": 80},
+            {"name": "Topic C", "value": 45},
+            {"name": "Topic D", "value": 60},
+            {"name": "Topic E", "value": 20},
+            {"name": "Topic F", "value": 90},
+            {"name": "Topic G", "value": 55},
+        ]
+
+        # Path to your D3.js HTML file relative to this script
+        current_dir = Path(__file__).parent
+        d3_html_path = current_dir.parent.parent / "assets" / "d3" / "bar_chart_dynamic.html"
+
+        if d3_html_path.exists():
+            d3_html = load_d3_html(str(d3_html_path))
+            # Inject dynamic data into the HTML
+            d3_html = d3_html.replace("{{ data }}", json.dumps(dynamic_data))
+            components.html(
+                d3_html,
+                height=350,  # Adjust height as needed
+                scrolling=True
+            )
+        else:
+            st.warning("D3.js HTML file not found. Please ensure 'bar_chart_dynamic.html' exists in the 'assets/d3/' directory.")
+
 
 if __name__ == "__main__":
     main()
