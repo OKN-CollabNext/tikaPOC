@@ -4,6 +4,7 @@ import os
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 from .topic_agent import TopicAgent
+import json
 
 # Set up Key Vault client
 vault_url = "https://tikasecrets.vault.azure.net/"
@@ -21,13 +22,13 @@ class ChatManager:
         self.deployment = secret_client.get_secret("AZURE-OPENAI-DEPLOYMENT").value
         print(f"Using OpenAI deployment: {self.deployment}")
         self.topic_agent = TopicAgent()
-        
+
     def _format_topics(self, topics: List[Dict[str, Any]]) -> str:
         """Format topic results into a readable message."""
         messages = [
             {
                 "role": "system",
-                "content": """You are a helpful research assistant. Format the given topics into a 
+                "content": """You are a helpful research assistant. Format the given topics into a
                 natural, readable response. For each topic, include its name and description.
                 If the topics seem off-target, suggest how the user might refine their search."""
             },
@@ -36,7 +37,7 @@ class ChatManager:
                 "content": f"Format these topics into a response: {topics}"
             }
         ]
-        
+
         try:
             response = self.client.chat.completions.create(
                 model=self.deployment,  # Use the deployment name from Key Vault
@@ -51,30 +52,57 @@ class ChatManager:
                 f"Topic {i+1}: {topic['display_name']}\n{topic['description']}"
                 for i, topic in enumerate(topics)
             ])
-    
+
     def handle_message(self, user_message: str) -> str:
         """
         Main message handler. Searches for topics and formats response.
-        
+
         Args:
             user_message: The user's input message
-            
+
         Returns:
             Response string to display to user
         """
         # Search for topics
         topics = self.topic_agent.process_query(user_message)
-        
+
         if not topics:
             return ("I couldn't find any relevant research topics. Could you try rephrasing "
                    "your query or being more specific?")
-        
+
         return self._format_topics(topics)
-    
+
     def exclude_current_topics(self, topic_ids: List[str]) -> None:
         """Exclude topics from future searches."""
         self.topic_agent.exclude_topics(topic_ids)
-    
+
     def reset_conversation(self) -> None:
         """Reset the conversation and agent memory."""
-        self.topic_agent.reset_memory() 
+        self.topic_agent.reset_memory()
+
+    # -------------------------------
+    # New Functionalities Integration
+    # -------------------------------
+    def generate_structured_ontology(self, user_input: str) -> Dict[str, Any]:
+        """
+        Generate a structured JSON ontology based on user input.
+
+        Args:
+            user_input: The user's input string.
+
+        Returns:
+            Dictionary representing the structured ontology.
+        """
+        return self.topic_agent.generate_structured_ontology(user_input)
+
+    def classify_topic_across_ontologies(self, user_topic: str) -> Dict[str, str]:
+        """
+        Classify a user topic across multiple ontologies (ACM, IEEE, AMS).
+
+        Args:
+            user_topic: The topic string provided by the user.
+
+        Returns:
+            Dictionary with ontology classifications.
+        """
+        return self.topic_agent.classify_topic_across_ontologies(user_topic)
