@@ -16,7 +16,7 @@ CREATE TABLE topics (
 CREATE TABLE keywords (
     id BIGSERIAL PRIMARY KEY,
     keyword TEXT NOT NULL UNIQUE,
-    embedding vector(768),  
+    embedding vector(768),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -30,3 +30,6 @@ CREATE TABLE topic_keywords (
 -- Create an index for vector similarity search
 CREATE INDEX ON keywords USING ivfflat (embedding vector_cosine_ops)
 WITH (lists = 100);  -- Number of lists can be adjusted based on your data size
+
+-- B-tree index for autocomplete
+CREATE INDEX IF NOT EXISTS idx_keywords_keyword ON keywords(keyword);

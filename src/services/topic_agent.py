@@ -30,7 +30,7 @@ class TopicAgent:
             api_version="2024-12-01-preview"
         )
         self.deployment = secret_client.get_secret("AZURE-OPENAI-DEPLOYMENT").value
-        
+
     def _rewrite_query(self) -> str:
         """
         Rewrite the query using context from recent queries.
@@ -38,12 +38,12 @@ class TopicAgent:
         """
         query_history = list(self.state.recent_queries)
         print(f"Query history before rewrite: {query_history}")
-        
+
         messages = [
             {
                 "role": "system",
-                "content": """You are a query rewriting assistant. Given a sequence of user queries, 
-                rewrite them into a single, comprehensive query that captures the user's evolving intent. 
+                "content": """You are a query rewriting assistant. Given a sequence of user queries,
+                rewrite them into a single, comprehensive query that captures the user's evolving intent.
                 Focus on creating a search-friendly query that works well with embedding-based search.
                 Return ONLY the rewritten query, nothing else."""
             },
@@ -51,11 +51,11 @@ class TopicAgent:
                 "role": "user",
                 "content": f"""Previous queries: {', '.join(query_history[:-1])}
                 Current query: {query_history[-1]}
-                
+
                 Rewrite these queries into a single, comprehensive query."""
             }
         ]
-        
+
         try:
             response = self.client.chat.completions.create(
                 model=self.deployment,  # Use deployment from Key Vault
@@ -70,46 +70,46 @@ class TopicAgent:
             print(f"OpenAI API error in query rewriting: {str(e)}")
             # Fallback to using the latest query if rewriting fails
             return query_history[-1]
-    
+
     def process_query(self, user_input: str) -> List[Dict[str, Any]]:
         """
         Process user input and return relevant topics.
-        
+
         Args:
             user_input: The user's query string
-            
+
         Returns:
             List of topic dictionaries containing id, display_name, and description
         """
         # Add new query to history
         self.state.recent_queries.append(user_input)
-        
+
         # Debug print
         print(f"Current query history: {list(self.state.recent_queries)}")
         print(f"Number of queries in history: {len(self.state.recent_queries)}")
-        
+
         # Determine if we should rewrite
         should_rewrite = len(self.state.recent_queries) > 1
         print(f"Should rewrite: {should_rewrite}")  # Debug print
-        
+
         # Get search query
         query_to_search = self._rewrite_query() if should_rewrite else user_input
         print(f"Final search query: {query_to_search}")  # Debug print
-        
+
         # Search with excluded topics
         return self.searcher.search_topics(
             query=query_to_search,
             excluded_topic_ids=self.state.excluded_topic_ids
         )
-    
+
     def exclude_topics(self, topic_ids: List[str]) -> None:
         """Add topics to the excluded set."""
         self.state.excluded_topic_ids.update(topic_ids)
-    
+
     def reset_memory(self) -> None:
         """Reset the agent's memory (both excluded topics and query history)."""
         self.state = AgentState()
-    
+
     def get_state_summary(self) -> Dict[str, Any]:
         """Get a summary of current agent state for debugging."""
         return {
@@ -117,3 +117,16 @@ class TopicAgent:
             "recent_queries": list(self.state.recent_queries),
             "has_context": len(self.state.recent_queries) > 1
         }
+
+    def autocomplete(self, partial_input: str, limit: int = 5) -> List[str]:
+        """
+        Provide keyword suggestions based on partial input.
+
+        Args:
+            partial_input: The user's partial input string.
+            limit: Maximum number of suggestions to return.
+
+        Returns:
+            List of keyword suggestions.
+        """
+        return self.searcher.autocomplete_keywords(partial_input, limit)
