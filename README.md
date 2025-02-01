@@ -86,3 +86,9 @@ All services are hosted in Azure under the OKN Project Cloudbank subscription:
   - Azure Key Vault: Manages service credentials and connection strings
   - Azure OpenAI Service: GPT-4 deployment for query processing and response generation
 - **Authentication**: Managed through Azure DefaultAzureCredential
+
+
+`(base) ~/tikaPOC (sslmodenotrequired ✗) brew install redis`
+`(base) ~/tikaPOC (sslmodenotrequired ✗) redis-server`
+`(base) ~/tikaPOC (sslmodenotrequired ✗) python src/services/openalex_topics_processing.py`
+

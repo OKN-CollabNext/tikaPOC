@@ -1,0 +1,170 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        
+            <script src="lib/bindings/utils.js"></script>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+            
+        
+<center>
+<h1></h1>
+</center>
+
+<!-- <link rel="stylesheet" href="../node_modules/vis/dist/vis.min.css" type="text/css" />
+<script type="text/javascript" src="../node_modules/vis/dist/vis.js"> </script>-->
+        <link
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6"
+          crossorigin="anonymous"
+        />
+        <script
+          src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-JEW9xMcG8R+pH31jmWH6WWP0WintQrMb4s7ZOdauHnUtxwoG2vI5DkLtS3qm9Ekf"
+          crossorigin="anonymous"
+        ></script>
+
+
+        <center>
+          <h1></h1>
+        </center>
+        <style type="text/css">
+
+             #mynetwork {
+                 width: 100%;
+                 height: 600px;
+                 background-color: #ffffff;
+                 border: 1px solid lightgray;
+                 position: relative;
+                 float: left;
+             }
+
+             
+
+             
+             #config {
+                 float: left;
+                 width: 400px;
+                 height: 600px;
+             }
+             
+
+             
+        </style>
+    </head>
+
+
+    <body>
+        <div class="card" style="width: 100%">
+            
+            
+            <div id="mynetwork" class="card-body"></div>
+        </div>
+
+        
+        
+            <div id="config"></div>
+        
+
+        <script type="text/javascript">
+
+              // initialize global variables.
+              var edges;
+              var nodes;
+              var allNodes;
+              var allEdges;
+              var nodeColors;
+              var originalNodes;
+              var network;
+              var container;
+              var options, data;
+              var filter = {
+                  item : '',
+                  property : '',
+                  value : []
+              };
+
+              
+
+              
+
+              // This method is responsible for drawing the graph, returns the drawn network
+              function drawGraph() {
+                  var container = document.getElementById('mynetwork');
+
+                  
+
+                  // parsing and collecting nodes and edges from the python
+                  nodes = new vis.DataSet([{"color": "#97c2fc", "id": "https://openalex.org/T11475", "label": "French Urban and Social Studies", "shape": "dot", "size": 10, "title": "This cluster of papers explores the intersection of territorial governance, environmental participation, and sustainable development. It delves into topics such as citizen participation, local development, social justice, and community engagement in the context of rural territories. The papers also discuss the role of proximity and innovation in shaping public policy for sustainable and inclusive development."}, {"color": "#97c2fc", "id": "https://openalex.org/T13033", "label": "Social Sciences and Governance", "shape": "dot", "size": 10, "title": "This cluster of papers explores the role of social innovation in territorial development, focusing on topics such as economic development, territorial governance, solidarity economy, community engagement, and institutionalization. It delves into the impact of cooperatives, local development initiatives, participative evaluation, and the promotion of citizenship within the context of social innovation. The papers also discuss the challenges and opportunities for fostering social innovation to address various societal and economic issues at the local level."}, {"color": "#97c2fc", "id": "https://openalex.org/T13445", "label": "American Constitutional Law and Politics", "shape": "dot", "size": 10, "title": "This cluster of papers explores the development of American political thought and history, focusing on topics such as the American founding, constitutional government, religious freedom, public opinion, separation of church and state, presidential prerogative, early republic, federalism, political philosophy, and nationalism."}, {"color": "#97c2fc", "id": "https://openalex.org/T10893", "label": "Chinese history and philosophy", "shape": "dot", "size": 10, "title": "This cluster of papers explores the religious diversity and regulation in Chinese society, covering topics such as Confucianism, Christianity, Falun Gong, the Cultural Revolution, nationalism, and the history of religion in China. It delves into the discourse of civilization, state regulation of religion, and the influence of emotions on beliefs."}, {"color": "#97c2fc", "id": "https://openalex.org/T10362", "label": "Biblical Studies and Interpretation", "shape": "dot", "size": 10, "title": "This cluster of papers focuses on biblical studies, ancient Judaism, early Christianity, and Christian theology. It explores topics such as biblical monotheism, Jewish society, Christian identity in the ancient world, the Hebrew Bible, early Christian literature, Iron Age chronology, theology, and the Dead Sea Scrolls."}, {"color": "#97c2fc", "id": "https://openalex.org/T12409", "label": "Reformation and Early Modern Christianity", "shape": "dot", "size": 10, "title": "This cluster of papers encompasses a wide range of topics related to the Reformation, Calvinism, religious controversy, church history, and social and cultural dynamics in Early Modern Europe. It explores the theological, political, and societal implications of the Reformation movement and its influence on various aspects of European life during that period."}, {"color": "#97c2fc", "id": "https://openalex.org/T13641", "label": "Historical Studies and Socio-cultural Analysis", "shape": "dot", "size": 10, "title": "This cluster of papers covers a wide range of topics related to the history of science and technology, including scientific institutions, technological development, innovation, intellectual exchange, and the cultural impact of scientific advancements. It explores historical narratives, cross-disciplinary studies, and the transmission of knowledge on a global scale."}, {"color": "#97c2fc", "id": "https://openalex.org/T10128", "label": "Global trade and economics", "shape": "dot", "size": 10, "title": "This cluster of papers explores the impact of international trade on productivity, firm-level dynamics, and economic growth. It covers topics such as trade liberalization, firm-level data analysis, globalization, technology, market size, innovation, and economic development."}, {"color": "#97c2fc", "id": "https://openalex.org/T12836", "label": "History and Developments in Astronomy", "shape": "dot", "size": 10, "title": "This cluster of papers covers the historical development and impact of astronomy, with a focus on radio astronomy, transits of Venus, high-resolution imaging, spectroscopy, solar observations, early astronomical instruments, scientific expeditions, astronomical discoveries, cultural impact, and historical figures in the field. It provides insights into the evolution of astronomical techniques and their influence on society and scientific progress."}, {"color": "#97c2fc", "id": "https://openalex.org/T11893", "label": "German Literature and Culture Studies", "shape": "dot", "size": 10, "title": "This cluster of papers encompasses a wide range of topics in literary studies and criticism, including authorship, bildungsroman, literature critique, gender, aesthetics, cultural memory, poetics, romanticism, and identity."}, {"color": "#97c2fc", "id": "https://openalex.org/T12645", "label": "European history and politics", "shape": "dot", "size": 10, "title": "This cluster of papers explores various aspects of Nazi Germany, including propaganda, forced labor, sexuality, gender, and the postwar period in Europe. It delves into the social and cultural history of Nazi Germany, examining topics such as consumerism, homosexuality, occupation policies, and the experiences of different groups during World War II."}, {"color": "#97c2fc", "id": "https://openalex.org/T13396", "label": "Agriculture and Rural Development Research", "shape": "dot", "size": 10, "title": "This cluster of papers explores the evolution, sustainability, and adaptation of livestock farming systems, with a focus on work organization, diversity, multifunctionality, and the challenges faced by smallholder farmers. It delves into topics such as agricultural development, agroecology, and the impact of climate change on livestock farming. The papers also discuss strategies for enhancing the sustainability and resilience of livestock farming systems."}, {"color": "#97c2fc", "id": "https://openalex.org/T10017", "label": "Geology and Paleoclimatology Research", "shape": "dot", "size": 10, "title": "This cluster of papers encompasses research on climate change and paleoclimatology, including topics such as glacial cycles, Holocene climate variability, sea level fluctuations, monsoon dynamics, greenhouse warming, ice core records, solar influence on climate, and atmospheric CO2 concentrations over various timescales."}, {"color": "#97c2fc", "id": "https://openalex.org/T12618", "label": "Botany and Plant Ecology Studies", "shape": "dot", "size": 10, "title": "This cluster of papers covers a wide range of topics related to the diversity, distribution, and conservation of vascular plants in Central Europe. It includes studies on flora, vegetation types, climate change impacts, biodiversity hotspots, invasive species, and the ecological significance of different habitats. The research also addresses the effects of human activities on plant communities and the potential strategies for their conservation."}, {"color": "#97c2fc", "id": "https://openalex.org/T11405", "label": "Geophysics and Gravity Measurements", "shape": "dot", "size": 10, "title": "This cluster of papers focuses on the global variability and change in sea level, with an emphasis on utilizing GRACE and other satellite measurements to understand factors such as groundwater depletion, polar ice sheet mass loss, and the impact of climate change. The papers also explore the use of hydrological and geodetic modeling to assess land water storage and its contribution to sea level rise."}, {"color": "#97c2fc", "id": "https://openalex.org/T10487", "label": "Plant and animal studies", "shape": "dot", "size": 10, "title": "This cluster of papers explores the impact of pollinator decline on ecosystems and agriculture, focusing on plant-animal interactions, biodiversity, crop pollination, habitat fragmentation, and the effects of global change and invasive species. The papers discuss the importance of pollinators for ecosystem services and highlight the challenges posed by climate change and habitat loss to pollinator populations."}, {"color": "#97c2fc", "id": "https://openalex.org/T12565", "label": "Physics and Engineering Research Articles", "shape": "dot", "size": 10, "title": "This cluster of papers covers a wide range of topics related to fluid dynamics, renewable energy integration, engineering applications, materials science, vibration analysis, thermal management, sustainability, turbine technology, and mathematical modeling. It includes research on topics such as wind energy systems, hydrodynamics, heat transfer enhancement, and the development of new composite materials for various engineering applications."}, {"color": "#97c2fc", "id": "https://openalex.org/T13710", "label": "European and International Law Studies", "shape": "dot", "size": 10, "title": "This cluster of papers explores the concept of judicial review, particularly within the context of European legal systems, with a focus on constitutionalism, the European Convention on Human Rights (ECHR), democracy, and the influence of the EFTA Court. It delves into the dynamics of legal culture and the integration of Nordic countries into the EU, emphasizing human rights and the role of courts in upholding them."}, {"color": "#97c2fc", "id": "https://openalex.org/T12954", "label": "Law and Political Science", "shape": "dot", "size": 10, "title": "This cluster of papers explores the evolution of legal systems, jurisprudence, and governance in European countries, focusing on topics such as party competition, legal methodology, privacy in the digital age, migration law, constitutional courts, regulatory agencies, human rights protection, European law dynamics, and criminal justice. It reflects a multidisciplinary approach to understanding the changing landscape of legal studies and its intersection with societal and technological developments."}, {"color": "#97c2fc", "id": "https://openalex.org/T11857", "label": "Archaeological and Historical Studies", "shape": "dot", "size": 10, "title": "This cluster of papers covers a wide range of topics related to the archaeology of the Iberian Peninsula, including the Iron Age, Romanization, Celtic culture, Phoenician influence, numismatics, religious practices, settlement patterns, and cultural exchange. The papers explore the ancient history and material culture of the region, shedding light on its diverse and complex past."}, {"color": "#97c2fc", "id": "https://openalex.org/T14162", "label": "Historical and Literary Studies", "shape": "dot", "size": 10, "title": "This cluster of papers covers a wide range of topics related to the economy and society in ancient Rome, including living standards, urban workshops, artisan clusters, production technology, and the use of encyclopedias. It also delves into the archaeological exploration of Pompeii and its relevance to understanding Roman lifestyles. The papers provide insights into various aspects of economic activities, social structures, and material culture in ancient Rome."}, {"color": "#97c2fc", "id": "https://openalex.org/T12021", "label": "Social and Educational Sciences", "shape": "dot", "size": 10, "title": "This cluster of papers covers a wide range of topics related to research methodology in social sciences and education, including qualitative research, discourse analysis, special education, gender studies, and quantitative methods. It explores various aspects of planning, conducting, and reporting research, with a focus on learning, pedagogy, and social construction of knowledge."}, {"color": "#97c2fc", "id": "https://openalex.org/T11530", "label": "Business and Management Studies", "shape": "dot", "size": 10, "title": "This cluster of papers covers a wide range of topics related to research methods, organizational management, and various aspects of business administration. It includes discussions on qualitative and quantitative research methods, case studies, data analysis techniques, competence management, marketing strategies, human resources management, and innovation management."}, {"color": "#97c2fc", "id": "https://openalex.org/T10351", "label": "Liver Disease Diagnosis and Treatment", "shape": "dot", "size": 10, "title": "This cluster of papers focuses on the epidemiology, diagnosis, management, and pathogenesis of Nonalcoholic Fatty Liver Disease (NAFLD). It covers topics such as liver fibrosis, insulin resistance, hepatic steatosis, metabolic syndrome, nonalcoholic steatohepatitis (NASH), and non-invasive assessment methods. The papers also discuss the association of NAFLD with hepatocellular carcinoma and its impact on public health."}, {"color": "#97c2fc", "id": "https://openalex.org/T12267", "label": "Diet and metabolism studies", "shape": "dot", "size": 10, "title": "This cluster of papers explores the effects of ketogenic diet on various aspects of health, including weight loss, metabolic syndrome, neurological disorders such as epilepsy and Alzheimer\u0027s disease, glucose transporter deficiency, cancer therapy, and inflammation. It covers topics related to the metabolic and therapeutic implications of ketone bodies, the role of ketosis in neuroprotection, and the potential benefits of ketogenic diet in managing various health conditions."}, {"color": "#97c2fc", "id": "https://openalex.org/T11949", "label": "Nuclear Physics and Applications", "shape": "dot", "size": 10, "title": "This cluster of papers focuses on neutron imaging and analysis techniques, including small-angle scattering, neutron activation analysis, tomography, spectrometer design and performance, radiography, backscattering spectrometers, data analysis software, calibration standards, and their applications in materials research."}, {"color": "#97c2fc", "id": "https://openalex.org/T11881", "label": "Crystallization and Solubility Studies", "shape": "dot", "size": 10, "title": "This cluster of papers focuses on the crystallization processes and control, including topics such as nucleation, solubility, polymorphism, ultrasound-assisted crystallization, process analytical technology, crystal growth, pharmaceutical crystallization, continuous crystallization, and crystal engineering."}, {"color": "#97c2fc", "id": "https://openalex.org/T10165", "label": "Classical Antiquity Studies", "shape": "dot", "size": 10, "title": "This cluster of papers explores various aspects of ancient Mediterranean civilizations, including the society, economy, literature, and religious practices of Ancient Rome and Greek societies. It covers topics such as demography, economic growth, poetry, religious beliefs, and social structures during the Classical Antiquity and Late Antiquity periods."}, {"color": "#97c2fc", "id": "https://openalex.org/T13624", "label": "Social Sciences and Policies", "shape": "dot", "size": 10, "title": "This cluster of papers covers a wide range of topics related to social work, welfare state, and community intervention in Spain. It includes discussions on gender differences, the impact of economic crisis, family support for vulnerable populations, migrant integration, and ethical challenges in social work practice. The papers also explore the role of the third sector, participation in social policies, and the evolving landscape of social welfare in Spain."}, {"color": "#97c2fc", "id": "https://openalex.org/T12983", "label": "Satellite Image Processing and Photogrammetry", "shape": "dot", "size": 10, "title": "This cluster of papers focuses on the geometric processing and accuracy assessment of remote sensing imagery, particularly from high-resolution satellite sensors. Topics include rational function models, orthorectification, DEM generation, sensor calibration, and geopositioning accuracy."}, {"color": "#97c2fc", "id": "https://openalex.org/T10995", "label": "Methane Hydrates and Related Phenomena", "shape": "dot", "size": 10, "title": "This cluster of papers focuses on the anaerobic oxidation of methane, particularly in relation to gas hydrates, microbial communities in subseafloor sediments, and the biogeochemical processes involved. It explores the role of archaea, nitrite-driven methane oxidation, and denitrification in marine environments."}, {"color": "#97c2fc", "id": "https://openalex.org/T13532", "label": "Education Systems and Policy", "shape": "dot", "size": 10, "title": "This cluster of papers focuses on vocational education and training in Australia, covering topics such as student retention, workforce skill development, rural and regional education, employment patterns, teacher retention, adult literacy and numeracy, youth labour market, and social partnerships."}, {"color": "#97c2fc", "id": "https://openalex.org/T13602", "label": "Educational Methods and Media Use", "shape": "dot", "size": 10, "title": "This cluster of papers focuses on enhancing digital literacy and education, with a particular emphasis on e-learning, school literacy movement, information literacy, and reading interest. The role of teachers in promoting literacy, multiliteracy paradigm, and early reading programs are also explored."}, {"color": "#97c2fc", "id": "https://openalex.org/T10325", "label": "Astro and Planetary Science", "shape": "dot", "size": 10, "title": "This cluster of papers explores the formation and evolution of the Solar System, including topics such as the abundances and compositions of various celestial bodies, the chronology of planetary formation, the taxonomy of asteroids and comets, and the structure of the Kuiper Belt. It also delves into the composition of meteorites, plumes on moons like Enceladus, and the presence of organic matter in extraterrestrial environments."}, {"color": "#97c2fc", "id": "https://openalex.org/T10908", "label": "Analytical Chemistry and Chromatography", "shape": "dot", "size": 10, "title": "This cluster of papers focuses on the separation of enantiomers using various chromatographic techniques such as liquid chromatography (LC) and gas chromatography (GC). It covers topics such as chiral stationary phases, enantioselective analysis, high-performance liquid chromatography (HPLC), hydrophilic interaction chromatography (HILIC), and the application of two-dimensional chromatography for chiral separation."}, {"color": "#97c2fc", "id": "https://openalex.org/T10391", "label": "Healthcare Policy and Management", "shape": "dot", "size": 10, "title": "This cluster of papers focuses on the economics of health care systems and policies, including topics such as health care spending, insurance markets, Medicare spending, the medical home model, accountable care organizations, health insurance coverage, health care utilization, welfare economics, regional variations in health care, and the role of primary care."}, {"color": "#97c2fc", "id": "https://openalex.org/T13085", "label": "Pedagogical and Educational Research", "shape": "dot", "size": 10, "title": "This cluster of papers covers a wide range of topics related to pedagogical and educational research, including methods of pedagogical research, curriculum reform, psychological studies in education, digital education, and student attitudes. It also explores teaching techniques, learning environments, and the impact of teacher competence on the school climate."}, {"color": "#97c2fc", "id": "https://openalex.org/T13275", "label": "Medical and Health Sciences Research", "shape": "dot", "size": 10, "title": "This cluster of papers covers a wide range of ethical and legal issues in medicine, including patient rights, reproductive medicine, healthcare law, informed consent, end-of-life care, bioethics, telemedicine, genetic testing, and physician liability."}, {"color": "#97c2fc", "id": "https://openalex.org/T13372", "label": "Archaeology and Historical Studies", "shape": "dot", "size": 10, "title": "This cluster of papers covers a wide range of topics related to the ancient Near East, including archaeology, history, and linguistics. It explores the civilizations, cultures, and agricultural systems of pre-Islamic Arabia, Byzantine and early Islamic periods, Nabataean inscriptions, desert agriculture, and urban development in Palestine."}, {"color": "#97c2fc", "id": "https://openalex.org/T10048", "label": "Particle physics theoretical and experimental studies", "shape": "dot", "size": 10, "title": "This cluster of papers covers a wide range of topics in particle physics, including high-energy collider experiments, Higgs boson observation, neutrino mass, supersymmetry, quantum chromodynamics, standard model, muon anomalous magnetic moment, electroweak symmetry breaking, and dark matter."}, {"color": "#97c2fc", "id": "https://openalex.org/T10181", "label": "Natural Language Processing Techniques", "shape": "dot", "size": 10, "title": "This cluster of papers focuses on statistical machine translation, neural machine translation, dependency parsing, word sense disambiguation, and part-of-speech tagging. It also covers topics such as corpus linguistics, syntax-based translation models, multilingual neural machine translation, and language modeling."}, {"color": "#97c2fc", "id": "https://openalex.org/T10001", "label": "Geological and Geochemical Analysis", "shape": "dot", "size": 10, "title": "This cluster of papers focuses on the tectonic evolution and geochronological analysis of orogenic processes, with a particular emphasis on zircon geochemistry, isotopic composition, and thermodynamic modeling. It covers topics such as subduction zones, mantle evolution, plate tectonics, and the growth of continental crust."}, {"color": "#97c2fc", "id": "https://openalex.org/T11930", "label": "Cardiac, Anesthesia and Surgical Outcomes", "shape": "dot", "size": 10, "title": "This cluster of papers focuses on the assessment and management of cardiac risk in patients undergoing noncardiac surgery. It covers topics such as perioperative mortality, troponin levels, beta-blocker therapy, cardiovascular evaluation, surgical risk calculators, and postoperative complications. The papers also discuss various guidelines for pre-operative cardiac risk assessment and perioperative cardiac management."}, {"color": "#97c2fc", "id": "https://openalex.org/T11159", "label": "Manufacturing Process and Optimization", "shape": "dot", "size": 10, "title": "This cluster of papers focuses on the design, planning, and optimization of manufacturing processes, with an emphasis on design for manufacture and assembly. It covers topics such as assembly planning, disassembly sequencing, CAD/CAM integration, process planning, tolerance analysis, virtual prototyping, fixture design, product cost estimation, and collaborative manufacturing."}, {"color": "#97c2fc", "id": "https://openalex.org/T12613", "label": "X-ray Diffraction in Crystallography", "shape": "dot", "size": 10, "title": "This cluster of papers focuses on the advances in powder diffraction analysis, including topics such as crystallography, structure determination, pair distribution function, nanoparticles, Rietveld refinement, total scattering, high-resolution X-ray diffraction, and quantitative phase analysis."}, {"color": "#97c2fc", "id": "https://openalex.org/T13297", "label": "History and advancements in chemistry", "shape": "dot", "size": 10, "title": "This cluster of papers focuses on the application of partially ordered sets in chemistry research, particularly in the context of ranking chemical substances, multi-criteria analysis, and sustainable development goals. It explores topics such as the periodic table, quantitative superstructure/activity relationships, environmental health, and decision support systems."}, {"color": "#97c2fc", "id": "https://openalex.org/T10825", "label": "Plant Pathogens and Fungal Diseases", "shape": "dot", "size": 10, "title": "This cluster of papers explores the diversity, evolution, and pathogenicity of fungal pathogens, with a focus on endophytic fungi, phylogenetic analysis, genomic characterization, plant pathogenesis, species recognition, molecular identification, host specificity, and taxonomic revision."}, {"color": "#97c2fc", "id": "https://openalex.org/T10251", "label": "Solar and Space Plasma Dynamics", "shape": "dot", "size": 10, "title": "This cluster of papers covers a wide range of topics related to solar physics, including the study of solar dynamics, coronal mass ejections, solar wind, magnetohydrodynamic turbulence, solar flares, helioseismology, solar irradiance variability, interplanetary coronal mass ejections, sunspots, and space weather."}, {"color": "#97c2fc", "id": "https://openalex.org/T10037", "label": "Physics of Superconductivity and Magnetism", "shape": "dot", "size": 10, "title": "This cluster of papers focuses on the physics of high-temperature superconductivity, particularly in cuprate superconductors. It covers a wide range of topics including electronic structure calculations, proximity effects in superconductor-ferromagnet structures, quantum Monte Carlo methods, and the evidence for electron\u2013phonon coupling in high-temperature superconductors."}, {"color": "#97c2fc", "id": "https://openalex.org/T12765", "label": "Race, History, and American Society", "shape": "dot", "size": 10, "title": "This cluster of papers explores the intersection of the Civil Rights Movement, Black Studies, and African American history. It delves into topics such as social movements, racial equality, Black Power, Pan-Africanism, feminism, and community activism within the context of the Cold War era."}]);
+                  edges = new vis.DataSet([{"from": "https://openalex.org/T11475", "to": "https://openalex.org/T13033", "width": 3}, {"from": "https://openalex.org/T13445", "to": "https://openalex.org/T10893", "width": 1}, {"from": "https://openalex.org/T10362", "to": "https://openalex.org/T12409", "width": 1}, {"from": "https://openalex.org/T13641", "to": "https://openalex.org/T10128", "width": 1}, {"from": "https://openalex.org/T13641", "to": "https://openalex.org/T12836", "width": 1}, {"from": "https://openalex.org/T11893", "to": "https://openalex.org/T12645", "width": 1}, {"from": "https://openalex.org/T13396", "to": "https://openalex.org/T10017", "width": 1}, {"from": "https://openalex.org/T13396", "to": "https://openalex.org/T12618", "width": 1}, {"from": "https://openalex.org/T13396", "to": "https://openalex.org/T11405", "width": 1}, {"from": "https://openalex.org/T13396", "to": "https://openalex.org/T10487", "width": 1}, {"from": "https://openalex.org/T13396", "to": "https://openalex.org/T12565", "width": 1}, {"from": "https://openalex.org/T13710", "to": "https://openalex.org/T12954", "width": 1}, {"from": "https://openalex.org/T10017", "to": "https://openalex.org/T12618", "width": 1}, {"from": "https://openalex.org/T10017", "to": "https://openalex.org/T11405", "width": 1}, {"from": "https://openalex.org/T10017", "to": "https://openalex.org/T10487", "width": 1}, {"from": "https://openalex.org/T11857", "to": "https://openalex.org/T14162", "width": 1}, {"from": "https://openalex.org/T12409", "to": "https://openalex.org/T12645", "width": 1}, {"from": "https://openalex.org/T12021", "to": "https://openalex.org/T11530", "width": 1}, {"from": "https://openalex.org/T13033", "to": "https://openalex.org/T10128", "width": 1}, {"from": "https://openalex.org/T12618", "to": "https://openalex.org/T11405", "width": 1}, {"from": "https://openalex.org/T12618", "to": "https://openalex.org/T10487", "width": 3}, {"from": "https://openalex.org/T10351", "to": "https://openalex.org/T12267", "width": 1}, {"from": "https://openalex.org/T11405", "to": "https://openalex.org/T10487", "width": 1}, {"from": "https://openalex.org/T11530", "to": "https://openalex.org/T11949", "width": 1}]);
+
+                  nodeColors = {};
+                  allNodes = nodes.get({ returnType: "Object" });
+                  for (nodeId in allNodes) {
+                    nodeColors[nodeId] = allNodes[nodeId].color;
+                  }
+                  allEdges = edges.get({ returnType: "Object" });
+                  // adding nodes and edges to the graph
+                  data = {nodes: nodes, edges: edges};
+
+                  var options = {
+    "configure": {
+        "enabled": true,
+        "filter": [
+            "physics"
+        ]
+    },
+    "edges": {
+        "color": {
+            "inherit": true
+        },
+        "smooth": {
+            "enabled": true,
+            "type": "dynamic"
+        }
+    },
+    "interaction": {
+        "dragNodes": true,
+        "hideEdgesOnDrag": false,
+        "hideNodesOnDrag": false
+    },
+    "physics": {
+        "enabled": true,
+        "stabilization": {
+            "enabled": true,
+            "fit": true,
+            "iterations": 1000,
+            "onlyDynamicEdges": false,
+            "updateInterval": 50
+        }
+    }
+};
+
+                  
+
+
+                  
+                  // if this network requires displaying the configure window,
+                  // put it in its div
+                  options.configure["container"] = document.getElementById("config");
+                  
+
+                  network = new vis.Network(container, data, options);
+
+                  
+
+                  
+
+                  
+
+
+                  
+
+                  return network;
+
+              }
+              drawGraph();
+        </script>
+    </body>
+</html>

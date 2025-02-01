@@ -6,8 +6,10 @@ import torch
 from transformers import AutoTokenizer, AutoModel
 import sys
 import os
+import hashlib
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
+from utils.cache import cache_get, cache_set
 
 # Append parent directory for module resolution
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -52,8 +54,15 @@ class TopicSearcher:
     ) -> List[Dict[str, Any]]:
         """
         Search topics using a hybrid approach that combines dense vector similarity and
-        keyword matching. (A future enhancement would be to incorporate hierarchy-aware re-ranking.)
+        keyword matching.
         """
+        # Create a cache key based on query and exclusions
+        cache_key = f"search:{hashlib.md5((query + str(sorted(excluded_topic_ids))).encode()).hexdigest()}"
+        cached_result = cache_get(cache_key)
+        if cached_result:
+            print("Returning cached search results.")
+            return cached_result
+
         query_embedding = self.get_embedding(query)
 
         # Debug information
@@ -135,7 +144,7 @@ class TopicSearcher:
                 for line in cur.fetchall():
                     print(line[0])
 
-                # Execute the actual search query
+                # Execute the search query
                 cur.execute(search_query, query_params)
                 results = [
                     {
@@ -157,6 +166,7 @@ class TopicSearcher:
                     print(f"Keyword Similarity: {r['keyword_similarity']}")
                     print(f"Combined Score: {r['score']}\n")
 
+                cache_set(cache_key, results)
                 return results
 
 def get_db_connection() -> connection:
@@ -186,7 +196,9 @@ def get_db_connection() -> connection:
                 database=db_name,
                 user=user,
                 password=password,
-                port=port
+                port=port,
+                sslmode="require",
+                sslrootcert="/Users/deangladish/Downloads/azure_root_chain.pem"
             )
             print("Connection successful!")
             return conn

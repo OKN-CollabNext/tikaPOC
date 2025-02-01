@@ -1,9 +1,3 @@
--- Create database (if not exists)
--- CREATE DATABASE openalex_vector_kg;
-
--- Connect to database and create extensions
--- \c openalex_vector_kg
-
 -- Create extension for vector similarity search
 CREATE EXTENSION IF NOT EXISTS vector;
 -- Enable trigram extension for better text matching
@@ -37,7 +31,7 @@ CREATE INDEX idx_keywords_topic_id ON keywords(topic_id);
 CREATE INDEX idx_keywords_keyword ON keywords(keyword);
 
 -- Create RRF function for hybrid search
-CREATE OR REPLACE FUNCTION rrf(dense_rank float, keyword_rank float, k float default 60.0) 
+CREATE OR REPLACE FUNCTION rrf(dense_rank float, keyword_rank float, k float default 60.0)
 RETURNS float AS $$
 BEGIN
     -- RRF formula: 1/(k + r) where k is typically 60

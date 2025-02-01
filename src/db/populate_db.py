@@ -69,7 +69,7 @@ def get_db_connection():
             password=password,
             port=port,
             sslmode="require",
-            sslrootcert="/Users/deangladish/tikaPOC/azure_root_chain.pem"
+            sslrootcert="/Users/deangladish/Downloads/azure_root_chain.pem"
         )
         return conn
     except Exception as e:
@@ -163,9 +163,9 @@ def main() -> None:
                     COUNT(embedding) as pairs_with_embeddings
                 FROM keywords
             """)
-            topics, pairs, with_emb = cur.fetchone()
+            topics_count, pairs, with_emb = cur.fetchone()
             print("\nFinal Statistics:")
-            print(f"Topics processed: {topics}")
+            print(f"Topics processed: {topics_count}")
             print(f"Total topic-keyword pairs: {pairs}")
             print(f"Pairs with embeddings: {with_emb}")
     finally:
