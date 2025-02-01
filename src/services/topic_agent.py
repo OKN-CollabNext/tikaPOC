@@ -1,8 +1,18 @@
 import os
+import sys  # <--- Add this import!
 import logging
 from dataclasses import dataclass, field
 from typing import List, Set, Dict, Any, Deque
 from collections import deque
+
+# Add the project root to sys.path so that logging_config.py can be imported.
+# Assuming the structure is:
+# /Users/deangladish/tikaPOC/logging_config.py
+# /Users/deangladish/tikaPOC/src/services/topic_agent.py
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from logging_config import setup_logging
+setup_logging()  # This will configure logging and write to "app.log"
 
 from openai import AzureOpenAI
 from .topic_search import TopicSearcher
@@ -10,15 +20,6 @@ from dotenv import load_dotenv
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 
-# Configure logging to output to both the console and a file named "app.log"
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler("app.log"),
-        logging.StreamHandler()
-    ]
-)
 logger = logging.getLogger(__name__)
 
 # Set up Key Vault client
@@ -46,7 +47,6 @@ class TopicAgent:
         self.state = AgentState()
         self.searcher = searcher if searcher is not None else TopicSearcher()
 
-        # Use dependency injection for the OpenAI client; otherwise, create one using Key Vault secrets.
         if client is not None:
             self.client = client
         else:
@@ -58,13 +58,6 @@ class TopicAgent:
         self.deployment = secret_client.get_secret("AZURE-OPENAI-DEPLOYMENT").value
 
     def _rewrite_query(self) -> str:
-        """
-        Rewrite the query using context from recent queries.
-        Only called when there are multiple queries in history.
-
-        Returns:
-            str: The rewritten query.
-        """
         query_history = list(self.state.recent_queries)
         logger.info(f"Query history before rewrite: {query_history}")
 
@@ -100,25 +93,15 @@ class TopicAgent:
             return rewritten
         except Exception as e:
             logger.error(f"OpenAI API error in query rewriting: {e}")
-            # Fallback to using the latest query if rewriting fails
             return query_history[-1]
 
     def _advanced_rewrite_query(self) -> str:
-        """
-        Advanced query rewriting: first combines previous queries, then paraphrases and expands the query
-        using synonyms to better capture user intent.
-
-        Returns:
-            str: The advanced rewritten query.
-        """
         query_history = list(self.state.recent_queries)
         logger.info(f"Query history before advanced rewrite: {query_history}")
 
-        # First, use the existing _rewrite_query to get a base rewritten query.
         base_rewritten_query = self._rewrite_query()
         logger.info(f"Base rewritten query: {base_rewritten_query}")
 
-        # Further refine the query with advanced paraphrasing and synonym expansion.
         messages = [
             {
                 "role": "system",
@@ -147,25 +130,13 @@ class TopicAgent:
             return advanced_query
         except Exception as e:
             logger.error(f"OpenAI API error in advanced query rewriting: {e}")
-            # Fallback to base rewritten query if advanced rewriting fails
             return base_rewritten_query
 
     def process_query(self, user_input: str) -> List[Dict[str, Any]]:
-        """
-        Process user input and return relevant topics.
-
-        Args:
-            user_input (str): The user's query string.
-
-        Returns:
-            List[Dict[str, Any]]: List of topic dictionaries containing id, display_name, and description.
-        """
-        # Add the new query to the history
         self.state.recent_queries.append(user_input)
         logger.info(f"Current query history: {list(self.state.recent_queries)}")
         logger.info(f"Number of queries in history: {len(self.state.recent_queries)}")
 
-        # Use advanced rewriting when more than one query exists
         should_rewrite = len(self.state.recent_queries) > 1
         logger.info(f"Should rewrite: {should_rewrite}")
 
@@ -175,34 +146,20 @@ class TopicAgent:
             query_to_search = user_input
         logger.info(f"Final search query: {query_to_search}")
 
-        # Return topics matching the search query, excluding topics already in state
         return self.searcher.search_topics(
             query=query_to_search,
             excluded_topic_ids=self.state.excluded_topic_ids
         )
 
     def exclude_topics(self, topic_ids: List[str]) -> None:
-        """
-        Add topics to the excluded set.
-
-        Args:
-            topic_ids (List[str]): List of topic IDs to exclude.
-        """
         self.state.excluded_topic_ids.update(topic_ids)
         logger.info(f"Updated excluded topics: {self.state.excluded_topic_ids}")
 
     def reset_memory(self) -> None:
-        """Reset the agent's memory (both excluded topics and query history)."""
         self.state = AgentState()
         logger.info("Agent memory has been reset.")
 
     def get_state_summary(self) -> Dict[str, Any]:
-        """
-        Get a summary of current agent state for debugging.
-
-        Returns:
-            Dict[str, Any]: A summary containing the count of excluded topics, recent queries, and whether context exists.
-        """
         return {
             "excluded_topics_count": len(self.state.excluded_topic_ids),
             "recent_queries": list(self.state.recent_queries),

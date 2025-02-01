@@ -6,8 +6,11 @@ import torch
 from transformers import AutoTokenizer, AutoModel
 import sys
 import os
+import time  # <-- added import for timing
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
+
+# Add the parent directory so that modules are found.
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Set up Key Vault client
@@ -15,21 +18,20 @@ vault_url = "https://tikasecrets.vault.azure.net/"
 credential = DefaultAzureCredential()
 secret_client = SecretClient(vault_url=vault_url, credential=credential)
 
+# You may also import logging from your configuration if needed.
+import logging
+logger = logging.getLogger(__name__)
+
 class TopicSearcher:
     def __init__(self) -> None:
         """Initialize the searcher with SciBERT model."""
         self.tokenizer = AutoTokenizer.from_pretrained("allenai/scibert_scivocab_uncased")
         self.model = AutoModel.from_pretrained("allenai/scibert_scivocab_uncased")
-        self.model.eval()  # Set to evaluation mode
+        self.model.eval()
 
     def get_embedding(self, text: str, topic_name: str = None) -> np.ndarray:
         """Get embedding for a text string, optionally prefixed with topic."""
-        if topic_name:
-            # Format: "TOPIC: keyword" to create contextual embeddings
-            text_to_embed = f"{topic_name}: {text}"
-        else:
-            text_to_embed = text
-
+        text_to_embed = f"{topic_name}: {text}" if topic_name else text
         inputs = self.tokenizer(
             text_to_embed,
             return_tensors="pt",
@@ -37,11 +39,9 @@ class TopicSearcher:
             truncation=True,
             padding=True
         )
-
         with torch.no_grad():
             outputs = self.model(**inputs)
             embedding = outputs.last_hidden_state[0, 0, :].numpy()
-
         return embedding
 
     def search_topics(
@@ -51,10 +51,8 @@ class TopicSearcher:
         n_similar: int = 20,
         n_topics: int = 3
     ) -> List[Dict[str, Any]]:
-        """Search using hybrid approach combining dense vectors and keyword matching."""
+        """Search using a hybrid approach combining dense vectors and keyword matching."""
         query_embedding = self.get_embedding(query)
-
-        # Debug print
         print(f"Query: {query}")
         print(f"Embedding shape: {query_embedding.shape}")
         print(f"Embedding sample: {query_embedding[:5]}")
@@ -66,7 +64,7 @@ class TopicSearcher:
                 t.display_name,
                 t.description,
                 k.keyword,
-                1.0 - (k.embedding <=> %s::vector) as vector_similarity,  -- Convert distance to similarity
+                1.0 - (k.embedding <=> %s::vector) as vector_similarity,
                 ROW_NUMBER() OVER (PARTITION BY t.id ORDER BY k.embedding <=> %s::vector) as dense_rank
             FROM keywords k
             JOIN topics t ON k.topic_id = t.id
@@ -90,7 +88,6 @@ class TopicSearcher:
                 v.display_name,
                 v.description,
                 v.keyword as matching_keyword,
-                -- Weighted combination of scores
                 (v.vector_similarity * 0.7 + k.keyword_similarity * 0.3) as combined_score,
                 v.vector_similarity,
                 k.keyword_similarity
@@ -99,13 +96,7 @@ class TopicSearcher:
             WHERE v.dense_rank = 1 AND k.keyword_rank = 1
         )
         SELECT
-            id,
-            display_name,
-            description,
-            matching_keyword,
-            combined_score,
-            vector_similarity,
-            keyword_similarity
+            id, display_name, description, matching_keyword, combined_score, vector_similarity, keyword_similarity
         FROM combined_scores
         ORDER BY combined_score DESC
         LIMIT %s
@@ -121,22 +112,23 @@ class TopicSearcher:
             n_topics
         )
 
+        # Start the timer before running the query.
+        start_time = time.time()
+
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                # First, let's check what we're working with
                 cur.execute("SELECT COUNT(*) FROM keywords WHERE embedding IS NOT NULL")
                 embedding_count = cur.fetchone()[0]
                 print(f"Number of embeddings in database: {embedding_count}")
 
-                # Execute with EXPLAIN ANALYZE
+                # Optionally, print the query plan.
                 cur.execute("EXPLAIN ANALYZE " + search_query, query_params)
                 print("\nQuery Plan:")
                 for line in cur.fetchall():
                     print(line[0])
 
-                # Execute actual query
+                # Execute the actual query.
                 cur.execute(search_query, query_params)
-
                 results = [
                     {
                         "id": row[0],
@@ -150,22 +142,30 @@ class TopicSearcher:
                     for row in cur.fetchall()
                 ]
 
-                # Debug print results
-                print("\nSearch Results:")
-                for r in results:
-                    print(f"Topic: {r['display_name']}")
-                    print(f"Vector Similarity: {r['vector_similarity']}")
-                    print(f"Keyword Similarity: {r['keyword_similarity']}")
-                    print(f"Combined Score: {r['score']}\n")
+        # Calculate and log the execution time.
+        execution_time = (time.time() - start_time) * 1000  # in milliseconds
+        logger.info(f"Execution Time: {execution_time:.3f} ms")
 
-                return results
+        # Log similarity metrics for each result.
+        for r in results:
+            logger.info(
+                f"Topic: {r['display_name']}, Vector Similarity: {r['vector_similarity']}, "
+                f"Keyword Similarity: {r['keyword_similarity']}, Combined Score: {r['score']}"
+            )
+
+        print("\nSearch Results:")
+        for r in results:
+            print(f"Topic: {r['display_name']}")
+            print(f"Vector Similarity: {r['vector_similarity']}")
+            print(f"Keyword Similarity: {r['keyword_similarity']}")
+            print(f"Combined Score: {r['score']}\n")
+        return results
 
 def get_db_connection() -> connection:
     """
     Create a database connection using secrets from Azure Key Vault.
     """
     try:
-        # First try to get all secrets
         try:
             host = secret_client.get_secret("DB-HOST").value
             db_name = secret_client.get_secret("DATABASE-NAME").value
@@ -178,11 +178,10 @@ def get_db_connection() -> connection:
 
         print("Retrieved connection details:")
         print(f"Host: {host}")
-        print(f"Database Name: {db_name}")  # Let's explicitly see the database name
+        print(f"Database Name: {db_name}")
         print(f"User: {user}")
         print(f"Port: {port}")
 
-        # Now try to connect
         try:
             conn = psycopg2.connect(
                 host=host,
@@ -191,7 +190,7 @@ def get_db_connection() -> connection:
                 password=password,
                 port=port,
                 sslmode="require",
-            sslrootcert="/Users/deangladish/tikaPOC/azure_root_chain.pem"
+                sslrootcert="/Users/deangladish/tikaPOC/azure_root_chain.pem"
             )
             print("Connection successful!")
             return conn
