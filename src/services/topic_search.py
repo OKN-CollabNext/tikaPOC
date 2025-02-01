@@ -17,19 +17,14 @@ secret_client = SecretClient(vault_url=vault_url, credential=credential)
 
 class TopicSearcher:
     def __init__(self) -> None:
-        """Initialize the searcher with SciBERT model."""
+        """Initialize the searcher with SciBERT model for semantic similarity."""
         self.tokenizer = AutoTokenizer.from_pretrained("allenai/scibert_scivocab_uncased")
         self.model = AutoModel.from_pretrained("allenai/scibert_scivocab_uncased")
-        self.model.eval()  # Set to evaluation mode
+        self.model.eval()
 
     def get_embedding(self, text: str, topic_name: str = None) -> np.ndarray:
-        """Get embedding for a text string, optionally prefixed with topic."""
-        if topic_name:
-            # Format: "TOPIC: keyword" to create contextual embeddings
-            text_to_embed = f"{topic_name}: {text}"
-        else:
-            text_to_embed = text
-            
+        """Get embedding for a text string, optionally prefixed with topic context."""
+        text_to_embed = f"{topic_name}: {text}" if topic_name else text
         inputs = self.tokenizer(
             text_to_embed,
             return_tensors="pt",
@@ -37,11 +32,9 @@ class TopicSearcher:
             truncation=True,
             padding=True
         )
-        
         with torch.no_grad():
             outputs = self.model(**inputs)
             embedding = outputs.last_hidden_state[0, 0, :].numpy()
-        
         return embedding
 
     def search_topics(
@@ -51,29 +44,27 @@ class TopicSearcher:
         n_similar: int = 20,
         n_topics: int = 3
     ) -> List[Dict[str, Any]]:
-        """Search using hybrid approach combining dense vectors and keyword matching."""
+        """Search using a hybrid approach combining dense vectors and keyword matching."""
         query_embedding = self.get_embedding(query)
-        
-        # Debug print
         print(f"Query: {query}")
         print(f"Embedding shape: {query_embedding.shape}")
         print(f"Embedding sample: {query_embedding[:5]}")
-        
+
         search_query = """
         WITH vector_scores AS (
-            SELECT 
+            SELECT
                 t.id,
                 t.display_name,
                 t.description,
                 k.keyword,
-                1.0 - (k.embedding <=> %s::vector) as vector_similarity,  -- Convert distance to similarity
+                1.0 - (k.embedding <=> %s::vector) as vector_similarity,
                 ROW_NUMBER() OVER (PARTITION BY t.id ORDER BY k.embedding <=> %s::vector) as dense_rank
             FROM keywords k
             JOIN topics t ON k.topic_id = t.id
             WHERE t.id != ALL(%s)
         ),
         keyword_scores AS (
-            SELECT 
+            SELECT
                 t.id,
                 t.display_name,
                 t.description,
@@ -85,12 +76,11 @@ class TopicSearcher:
             WHERE t.id != ALL(%s)
         ),
         combined_scores AS (
-            SELECT 
+            SELECT
                 v.id,
                 v.display_name,
                 v.description,
                 v.keyword as matching_keyword,
-                -- Weighted combination of scores
                 (v.vector_similarity * 0.7 + k.keyword_similarity * 0.3) as combined_score,
                 v.vector_similarity,
                 k.keyword_similarity
@@ -98,7 +88,7 @@ class TopicSearcher:
             JOIN keyword_scores k ON v.id = k.id
             WHERE v.dense_rank = 1 AND k.keyword_rank = 1
         )
-        SELECT 
+        SELECT
             id,
             display_name,
             description,
@@ -110,7 +100,7 @@ class TopicSearcher:
         ORDER BY combined_score DESC
         LIMIT %s
         """
-        
+
         query_params = (
             query_embedding.tolist(),
             query_embedding.tolist(),
@@ -120,23 +110,19 @@ class TopicSearcher:
             list(excluded_topic_ids) if excluded_topic_ids else [],
             n_topics
         )
-        
+
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                # First, let's check what we're working with
                 cur.execute("SELECT COUNT(*) FROM keywords WHERE embedding IS NOT NULL")
                 embedding_count = cur.fetchone()[0]
                 print(f"Number of embeddings in database: {embedding_count}")
-                
-                # Execute with EXPLAIN ANALYZE
+
                 cur.execute("EXPLAIN ANALYZE " + search_query, query_params)
                 print("\nQuery Plan:")
                 for line in cur.fetchall():
                     print(line[0])
-                
-                # Execute actual query
+
                 cur.execute(search_query, query_params)
-                
                 results = [
                     {
                         "id": row[0],
@@ -149,15 +135,14 @@ class TopicSearcher:
                     }
                     for row in cur.fetchall()
                 ]
-                
-                # Debug print results
+
                 print("\nSearch Results:")
                 for r in results:
                     print(f"Topic: {r['display_name']}")
                     print(f"Vector Similarity: {r['vector_similarity']}")
                     print(f"Keyword Similarity: {r['keyword_similarity']}")
                     print(f"Combined Score: {r['score']}\n")
-                
+
                 return results
 
 def get_db_connection() -> connection:
@@ -165,38 +150,24 @@ def get_db_connection() -> connection:
     Create a database connection using secrets from Azure Key Vault.
     """
     try:
-        # First try to get all secrets
-        try:
-            host = secret_client.get_secret("DB-HOST").value
-            db_name = secret_client.get_secret("DATABASE-NAME").value
-            user = secret_client.get_secret("DB-USER").value
-            password = secret_client.get_secret("DB-PASSWORD").value
-            port = secret_client.get_secret("DB-PORT").value
-        except Exception as e:
-            print(f"Failed to retrieve secrets from Key Vault: {str(e)}")
-            raise
-
+        host = secret_client.get_secret("DB-HOST").value
+        db_name = secret_client.get_secret("DATABASE-NAME").value
+        user = secret_client.get_secret("DB-USER").value
+        password = secret_client.get_secret("DB-PASSWORD").value
+        port = secret_client.get_secret("DB-PORT").value
         print("Retrieved connection details:")
-        print(f"Host: {host}")
-        print(f"Database Name: {db_name}")  # Let's explicitly see the database name
-        print(f"User: {user}")
-        print(f"Port: {port}")
-        
-        # Now try to connect
-        try:
-            conn = psycopg2.connect(
-                host=host,
-                database=db_name,
-                user=user,
-                password=password,
-                port=port
-            )
-            print("Connection successful!")
-            return conn
-        except psycopg2.Error as e:
-            print(f"PostgreSQL Error: {e.pgcode} - {e.pgerror}")
-            raise
-            
+        print(f"Host: {host}, Database: {db_name}, User: {user}, Port: {port}")
+        conn = psycopg2.connect(
+            host=host,
+            database=db_name,
+            user=user,
+            password=password,
+            port=port,
+            sslmode="require",
+            sslrootcert="/Users/deangladish/tikaPOC/azure_root_chain.pem"
+        )
+        print("Connection successful!")
+        return conn
     except Exception as e:
         print(f"Connection error details: {type(e).__name__}: {str(e)}")
-        raise ConnectionError(f"Failed to connect to database: {str(e)}") 
+        raise ConnectionError(f"Failed to connect to database: {str(e)}")
