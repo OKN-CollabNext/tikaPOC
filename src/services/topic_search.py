@@ -29,7 +29,7 @@ class TopicSearcher:
             text_to_embed = f"{topic_name}: {text}"
         else:
             text_to_embed = text
-            
+
         inputs = self.tokenizer(
             text_to_embed,
             return_tensors="pt",
@@ -37,11 +37,11 @@ class TopicSearcher:
             truncation=True,
             padding=True
         )
-        
+
         with torch.no_grad():
             outputs = self.model(**inputs)
             embedding = outputs.last_hidden_state[0, 0, :].numpy()
-        
+
         return embedding
 
     def search_topics(
@@ -53,15 +53,15 @@ class TopicSearcher:
     ) -> List[Dict[str, Any]]:
         """Search using hybrid approach combining dense vectors and keyword matching."""
         query_embedding = self.get_embedding(query)
-        
+
         # Debug print
         print(f"Query: {query}")
         print(f"Embedding shape: {query_embedding.shape}")
         print(f"Embedding sample: {query_embedding[:5]}")
-        
+
         search_query = """
         WITH vector_scores AS (
-            SELECT 
+            SELECT
                 t.id,
                 t.display_name,
                 t.description,
@@ -73,7 +73,7 @@ class TopicSearcher:
             WHERE t.id != ALL(%s)
         ),
         keyword_scores AS (
-            SELECT 
+            SELECT
                 t.id,
                 t.display_name,
                 t.description,
@@ -85,7 +85,7 @@ class TopicSearcher:
             WHERE t.id != ALL(%s)
         ),
         combined_scores AS (
-            SELECT 
+            SELECT
                 v.id,
                 v.display_name,
                 v.description,
@@ -98,7 +98,7 @@ class TopicSearcher:
             JOIN keyword_scores k ON v.id = k.id
             WHERE v.dense_rank = 1 AND k.keyword_rank = 1
         )
-        SELECT 
+        SELECT
             id,
             display_name,
             description,
@@ -110,7 +110,7 @@ class TopicSearcher:
         ORDER BY combined_score DESC
         LIMIT %s
         """
-        
+
         query_params = (
             query_embedding.tolist(),
             query_embedding.tolist(),
@@ -120,23 +120,23 @@ class TopicSearcher:
             list(excluded_topic_ids) if excluded_topic_ids else [],
             n_topics
         )
-        
+
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 # First, let's check what we're working with
                 cur.execute("SELECT COUNT(*) FROM keywords WHERE embedding IS NOT NULL")
                 embedding_count = cur.fetchone()[0]
                 print(f"Number of embeddings in database: {embedding_count}")
-                
+
                 # Execute with EXPLAIN ANALYZE
                 cur.execute("EXPLAIN ANALYZE " + search_query, query_params)
                 print("\nQuery Plan:")
                 for line in cur.fetchall():
                     print(line[0])
-                
+
                 # Execute actual query
                 cur.execute(search_query, query_params)
-                
+
                 results = [
                     {
                         "id": row[0],
@@ -149,7 +149,7 @@ class TopicSearcher:
                     }
                     for row in cur.fetchall()
                 ]
-                
+
                 # Debug print results
                 print("\nSearch Results:")
                 for r in results:
@@ -157,7 +157,7 @@ class TopicSearcher:
                     print(f"Vector Similarity: {r['vector_similarity']}")
                     print(f"Keyword Similarity: {r['keyword_similarity']}")
                     print(f"Combined Score: {r['score']}\n")
-                
+
                 return results
 
 def get_db_connection() -> connection:
@@ -181,7 +181,7 @@ def get_db_connection() -> connection:
         print(f"Database Name: {db_name}")  # Let's explicitly see the database name
         print(f"User: {user}")
         print(f"Port: {port}")
-        
+
         # Now try to connect
         try:
             conn = psycopg2.connect(
@@ -189,14 +189,16 @@ def get_db_connection() -> connection:
                 database=db_name,
                 user=user,
                 password=password,
-                port=port
+                port=port,
+                sslmode="require",
+            sslrootcert="/Users/deangladish/tikaPOC/azure_root_chain.pem"
             )
             print("Connection successful!")
             return conn
         except psycopg2.Error as e:
             print(f"PostgreSQL Error: {e.pgcode} - {e.pgerror}")
             raise
-            
+
     except Exception as e:
         print(f"Connection error details: {type(e).__name__}: {str(e)}")
-        raise ConnectionError(f"Failed to connect to database: {str(e)}") 
+        raise ConnectionError(f"Failed to connect to database: {str(e)}")
