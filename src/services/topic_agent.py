@@ -116,4 +116,4 @@ class TopicAgent:
             "excluded_topics_count": len(self.state.excluded_topic_ids),
             "recent_queries": list(self.state.recent_queries),
             "has_context": len(self.state.recent_queries) > 1
-        }
+            }

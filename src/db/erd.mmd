@@ -1,0 +1,18 @@
+erDiagram
+    topics {
+        TEXT id PK
+        TEXT display_name NOT NULL
+        TEXT description
+        TIMESTAMP created_at
+    }
+    
+    keywords {
+        BIGSERIAL id PK
+        TEXT keyword NOT NULL
+        TEXT topic_id FK
+        vector embedding
+        TIMESTAMP created_at
+        UNIQUE keyword_topic "keyword, topic_id"
+    }
+    
+    keywords }|--|| topics : references
