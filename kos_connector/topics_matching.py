@@ -5,6 +5,18 @@ from typing import Any, Dict, List, Optional
 
 import openai
 from openai import AzureOpenAI
+from dotenv import load_dotenv  # Import load_dotenv
+from pydantic import BaseModel, Field  # Import Pydantic
+import argparse
+
+
+# Load environment variables from .env file
+load_dotenv()
+
+
+# Define Pydantic model for the output
+class OpenAlexMatch(BaseModel):
+    openalex_id: str = Field(description="The OpenAlex ID of the best matching topic")
 
 
 def load_topics(filename: str) -> List[Dict[str, Any]]:
@@ -16,31 +28,69 @@ def load_topics(filename: str) -> List[Dict[str, Any]]:
 def build_openalex_hierarchy(
     openalex_topics: List[Dict[str, Any]]
 ) -> Dict[str, Dict[str, Any]]:
-    """Builds a hierarchical dictionary from the OpenAlex topics."""
+    """
+    Builds a hierarchical dictionary from the OpenAlex topics.
+    Each topic in OpenAlex belongs to a hierarchy: domain > field > subfield > topic
+    """
     hierarchy: Dict[str, Dict[str, Any]] = {}
-    # Create a lookup by ID
-    id_to_topic: Dict[str, Dict[str, Any]] = {
-        topic["id"]: topic for topic in openalex_topics
-    }
-
+    
+    # First pass: add all topics to the hierarchy
     for topic in openalex_topics:
         topic_id: str = topic["id"]
         hierarchy[topic_id] = {
+            "id": topic_id,
             "label": topic["display_name"],
-            "level": topic["level"],
-            "children": [],  # Initialize children list
+            "works_count": topic["works_count"],
+            "children": [],
+            "level": 3  # Topics are at level 3 (0-based: domain=0, field=1, subfield=2, topic=3)
         }
-        if topic["ancestors"]:
-            parent_id = topic["ancestors"][-1][
-                "id"
-            ]  # immediate parent is the last ancestor
-            if parent_id in id_to_topic:
-                if "children" not in id_to_topic[parent_id]:
-                    id_to_topic[parent_id]["children"] = []
-                id_to_topic[parent_id]["children"].append(
-                    topic_id
-                )  # add to parent's children
-
+        
+        # Add domain if not exists
+        domain_id = f"domain:{topic['domain']['id']}"
+        if domain_id not in hierarchy:
+            hierarchy[domain_id] = {
+                "id": domain_id,
+                "label": topic['domain']['display_name'],
+                "works_count": 10000000,  # Arbitrary high number to ensure domains are considered top-level
+                "children": [],
+                "level": 0  # Domain is level 0 (highest level)
+            }
+            
+        # Add field if not exists
+        field_id = f"field:{topic['field']['id']}"
+        if field_id not in hierarchy:
+            hierarchy[field_id] = {
+                "id": field_id,
+                "label": topic['field']['display_name'],
+                "works_count": 5000000,  # High number but less than domain
+                "children": [],
+                "level": 1  # Field is level 1
+            }
+            
+        # Add subfield if not exists
+        subfield_id = f"subfield:{topic['subfield']['id']}"
+        if subfield_id not in hierarchy:
+            hierarchy[subfield_id] = {
+                "id": subfield_id,
+                "label": topic['subfield']['display_name'],
+                "works_count": 1000000,  # High number but less than field
+                "children": [],
+                "level": 2  # Subfield is level 2
+            }
+            
+        # Build parent-child relationships
+        # Add topic to subfield's children
+        if topic_id not in hierarchy[subfield_id]["children"]:
+            hierarchy[subfield_id]["children"].append(topic_id)
+            
+        # Add subfield to field's children
+        if subfield_id not in hierarchy[field_id]["children"]:
+            hierarchy[field_id]["children"].append(subfield_id)
+            
+        # Add field to domain's children
+        if field_id not in hierarchy[domain_id]["children"]:
+            hierarchy[domain_id]["children"].append(field_id)
+    
     return hierarchy
 
 
@@ -74,7 +124,7 @@ def azure_openai_chat_completion(
     max_tokens: int = 50,
     temperature: float = 0.2,
     stop: Optional[List[str]] = None,
-) -> str:
+) -> Optional[str]:
     """Gets a chat completion from Azure OpenAI."""
     try:
         response = client.chat.completions.create(
@@ -86,17 +136,35 @@ def azure_openai_chat_completion(
             max_tokens=max_tokens,
             temperature=temperature,
             stop=stop,
+            response_format={"type": "json_object"},  # Enforce structured output without schema
         )
-        return response.choices[0].message.content.strip()
+        
+        # Parse the JSON response
+        response_content = response.choices[0].message.content
+        if response_content:
+            try:
+                json_response = json.loads(response_content)
+                return json_response.get("openalex_id")  # Extract openalex_id
+            except json.JSONDecodeError:
+                print("Invalid JSON response received.")
+                return None
+        return None
+
     except openai.RateLimitError as e:
         print(f"Rate limit exceeded: {e}.  Waiting 60 seconds...")
         time.sleep(60)
         return azure_openai_chat_completion(
             client, prompt, model, max_tokens, temperature, stop
         )  # Retry
+    except openai.APIConnectionError as e:
+        print(f"Connection error: {e}")
+        return None
+    except openai.BadRequestError as e:
+        print(f"Bad request error: {e}")
+        return None
     except Exception as e:
         print(f"An error occurred: {e}")
-        return ""
+        return None
 
 
 def create_match_prompt(
@@ -104,7 +172,8 @@ def create_match_prompt(
 ) -> str:
     """Creates the prompt for the LLM matching."""
     prompt = (
-        "Match the following ANZSRC topic to the MOST relevant OpenAlex topic ID.\n\n"
+        "Match the following ANZSRC topic to the MOST relevant OpenAlex topic ID.\n"
+        "Return the result as a JSON object with the key 'openalex_id'.\n\n" # Modified prompt
         "ANZSRC Topic:\n"
         f"Code: {anzsrc_topic['code']}\n"
         f"Label: {anzsrc_topic['label']}\n\n"
@@ -112,11 +181,11 @@ def create_match_prompt(
     )
     for topic in openalex_topics:
         prompt += f"{topic['id']}: {topic['label']}\n"
-    prompt += "\nReturn ONLY the OpenAlex ID of the best match, nothing else. For example: 'X123456789'"
+    prompt += "\nReturn ONLY a JSON object with the OpenAlex ID of the best match. For example: {\"openalex_id\": \"X123456789\"}" # Modified prompt
     return prompt
 
 
-def match_topics(
+def match_topics_by_level(
     client: AzureOpenAI,
     anzsrc_topics: List[Dict[str, Any]],
     openalex_hierarchy: Dict[str, Dict[str, Any]],
@@ -124,20 +193,28 @@ def match_topics(
     openalex_levels: List[int],
     model: str,
     matches: Dict[str, str],
-    parent_match: str = "",
 ) -> None:
-    """Recursively matches ANZSRC topics to OpenAlex topics."""
-
-    # Filter ANZSRC topics by level.  Handle level 1 differently
+    """
+    Matches ANZSRC topics at a specific level to OpenAlex topics.
+    This is a non-recursive version that processes one level at a time.
+    """
+    # Filter ANZSRC topics by level
     if anzsrc_level == 1:
-        current_anzsrc_topics = anzsrc_topics
+        # Level 1 topics have 2-digit codes
+        current_anzsrc_topics = [t for t in anzsrc_topics if len(t["code"]) == 2]
+    elif anzsrc_level == 2:
+        # Level 2 topics have 4-digit codes
+        current_anzsrc_topics = [t for t in anzsrc_topics if len(t["code"]) == 4]
+    elif anzsrc_level == 3:
+        # Level 3 topics have 6-digit codes
+        current_anzsrc_topics = [t for t in anzsrc_topics if len(t["code"]) == 6]
     else:
-        current_anzsrc_topics = [
-            t for t in anzsrc_topics if t["code"].startswith(parent_match)
-        ]
+        print(f"Invalid ANZSRC level: {anzsrc_level}")
+        return
 
     if not current_anzsrc_topics:
-        return  # No more topics at this level
+        print(f"No ANZSRC topics found at level {anzsrc_level}. Skipping.")
+        return
 
     openalex_candidates = get_openalex_topics_by_level(
         openalex_hierarchy, openalex_levels
@@ -149,47 +226,43 @@ def match_topics(
         return
 
     for anzsrc_topic in current_anzsrc_topics:
+        # Skip if we already have a match for this topic
+        if anzsrc_topic["code"] in matches:
+            print(f"Already matched ANZSRC {anzsrc_topic['code']}. Skipping.")
+            continue
+
         prompt = create_match_prompt(anzsrc_topic, openalex_candidates)
         match_id = azure_openai_chat_completion(client, prompt, model)
 
         if match_id:
             matches[anzsrc_topic["code"]] = match_id
             print(f"Matched ANZSRC {anzsrc_topic['code']} to OpenAlex {match_id}")
-
-            # Recursive call for next level
-            if anzsrc_level < 3:  # We have more levels to process
-                next_anzsrc_level = anzsrc_level + 1
-                next_openalex_levels = [
-                    openalex_levels[-1] + 1
-                ]  # Next OpenAlex level
-
-                match_topics(
-                    client,
-                    anzsrc_topics,
-                    openalex_hierarchy,
-                    next_anzsrc_level,
-                    next_openalex_levels,
-                    model,
-                    matches,
-                    anzsrc_topic["code"],
-                )
         else:
             print(f"No match found for ANZSRC {anzsrc_topic['code']}")
 
+        # Add a small delay to avoid rate limiting
+        time.sleep(0.5)
+
 
 def main() -> None:
-    """Main function to perform the multi-level matching."""
+    """Main function to perform the level-by-level matching."""
+    # Set up command line arguments
+    parser = argparse.ArgumentParser(description="Match ANZSRC topics to OpenAlex topics.")
+    parser.add_argument("--level", type=int, choices=[1, 2, 3], help="ANZSRC level to match (1, 2, or 3)")
+    parser.add_argument("--force", action="store_true", help="Force re-matching of already matched topics")
+    args = parser.parse_args()
+    
     # --- Configuration (Replace with your actual values) ---
     # Set up the Azure OpenAI client
     client = AzureOpenAI(
-        api_key=os.environ.get("AZURE_OPENAI_KEY", ""),
-        api_version=os.environ.get("AZURE_OPENAI_API_VERSION", "2024-02-01"),
-        azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT", ""),
+        api_key=os.getenv("AZURE_OPENAI_KEY", ""),
+        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", ""),
     )
 
-    anzsrc_file = "anzsrc_for_processed.json"  # Output from previous ANZSRC script
-    openalex_file = "openalex_topics.json"  # Output from previous OpenAlex script
-    output_file = "matches.json"
+    anzsrc_file = "data/anzsrc_for_processed.json"  # Output from previous ANZSRC script
+    openalex_file = "data/openalex_topics.json"  # Output from previous OpenAlex script
+    output_file = "data/matches.json"
     model_to_use = "gpt-4o"  # Or your specific deployment name
 
     # --- Load Data ---
@@ -197,22 +270,87 @@ def main() -> None:
     openalex_topics = load_topics(openalex_file)
     openalex_hierarchy = build_openalex_hierarchy(openalex_topics)
 
-    # --- Perform Matching ---
+    # --- Load existing matches if file exists ---
     matches: Dict[str, str] = {}
-    match_topics(
-        client,
-        anzsrc_topics,
-        openalex_hierarchy,
-        anzsrc_level=1,
-        openalex_levels=[0, 1],  # Start with OpenAlex levels 0 and 1
-        model=model_to_use,
-        matches=matches,
-    )
+    if os.path.exists(output_file):
+        try:
+            with open(output_file, "r", encoding="utf-8") as f:
+                matches = json.load(f)
+            print(f"Loaded {len(matches)} existing matches from {output_file}")
+        except json.JSONDecodeError:
+            print(f"Error loading {output_file}. Starting with empty matches.")
 
-    # --- Save Results ---
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(matches, f, indent=4)
-    print(f"Matching results saved to {output_file}")
+    # If force flag is set, clear existing matches for the specified level
+    if args.force and args.level:
+        if args.level == 1:
+            matches = {k: v for k, v in matches.items() if len(k) != 2}
+            print("Cleared existing level 1 matches.")
+        elif args.level == 2:
+            matches = {k: v for k, v in matches.items() if len(k) != 4}
+            print("Cleared existing level 2 matches.")
+        elif args.level == 3:
+            matches = {k: v for k, v in matches.items() if len(k) != 6}
+            print("Cleared existing level 3 matches.")
+
+    # --- Perform matching based on command line arguments ---
+    if args.level == 1 or args.level is None:
+        print("\n=== Matching ANZSRC Level 1 to OpenAlex Levels 0,1 ===")
+        match_topics_by_level(
+            client,
+            anzsrc_topics,
+            openalex_hierarchy,
+            anzsrc_level=1,
+            openalex_levels=[0, 1],  # Domain and Field levels
+            model=model_to_use,
+            matches=matches,
+        )
+        
+        # Save after level 1
+        with open(output_file, "w", encoding="utf-8") as f:
+            json.dump(matches, f, indent=4)
+        print(f"Level 1 matching results saved to {output_file}")
+        
+        # If specific level was requested, exit
+        if args.level == 1:
+            return
+
+    if args.level == 2 or args.level is None:
+        print("\n=== Matching ANZSRC Level 2 to OpenAlex Level 2 ===")
+        match_topics_by_level(
+            client,
+            anzsrc_topics,
+            openalex_hierarchy,
+            anzsrc_level=2,
+            openalex_levels=[2],  # Subfield level
+            model=model_to_use,
+            matches=matches,
+        )
+        
+        # Save after level 2
+        with open(output_file, "w", encoding="utf-8") as f:
+            json.dump(matches, f, indent=4)
+        print(f"Level 2 matching results saved to {output_file}")
+        
+        # If specific level was requested, exit
+        if args.level == 2:
+            return
+
+    if args.level == 3 or args.level is None:
+        print("\n=== Matching ANZSRC Level 3 to OpenAlex Level 3 ===")
+        match_topics_by_level(
+            client,
+            anzsrc_topics,
+            openalex_hierarchy,
+            anzsrc_level=3,
+            openalex_levels=[3],  # Topic level
+            model=model_to_use,
+            matches=matches,
+        )
+        
+        # Save after level 3
+        with open(output_file, "w", encoding="utf-8") as f:
+            json.dump(matches, f, indent=4)
+        print(f"Level 3 matching results saved to {output_file}")
 
 
 if __name__ == "__main__":
